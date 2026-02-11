@@ -8,10 +8,12 @@ its config section as it is implemented.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
