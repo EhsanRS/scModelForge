@@ -1,0 +1,83 @@
+# scModelForge example: Train a Geneformer-style model on local data
+#
+# Usage:
+#   scmodelforge train --config configs/examples/geneformer_basic.yaml
+#
+# This config trains a BERT-style transformer encoder with rank-value
+# tokenization (Geneformer approach) using masked gene prediction.
+
+data:
+  source: local
+  paths:
+    - ./data/my_dataset.h5ad
+  gene_vocab: human_protein_coding
+  preprocessing:
+    normalize: library_size
+    target_sum: 10000
+    hvg_selection: 2000
+    log1p: true
+  max_genes: 2048
+  num_workers: 4
+
+tokenizer:
+  strategy: rank_value
+  max_genes: 2048
+  gene_vocab: human_protein_coding
+  prepend_cls: true
+  masking:
+    mask_ratio: 0.15
+    random_replace_ratio: 0.1
+    keep_ratio: 0.1
+
+model:
+  architecture: transformer_encoder
+  hidden_dim: 512
+  num_layers: 12
+  num_heads: 8
+  dropout: 0.1
+  max_seq_len: 2048
+  pooling: cls
+  activation: gelu
+  use_expression_values: true
+  pretraining_task: masked_gene_prediction
+  mask_ratio: 0.15
+
+training:
+  batch_size: 64
+  max_epochs: 10
+  seed: 42
+  strategy: ddp
+  num_gpus: 4
+  precision: bf16-mixed
+  optimizer:
+    name: adamw
+    lr: 1.0e-4
+    weight_decay: 0.01
+  scheduler:
+    name: cosine_warmup
+    warmup_steps: 2000
+    total_steps: 100000
+  gradient_clip: 1.0
+  gradient_accumulation: 1
+  logger: wandb
+  wandb_project: scmodelforge
+  run_name: geneformer-basic
+  log_every_n_steps: 50
+  checkpoint_dir: ./checkpoints
+  save_top_k: 3
+  num_workers: 4
+  val_split: 0.05
+
+eval:
+  every_n_epochs: 2
+  benchmarks:
+    - name: embedding_quality
+      dataset: tabula_sapiens
+      params:
+        cell_type_key: cell_type
+        batch_key: batch
+    - name: linear_probe
+      dataset: tabula_sapiens
+      params:
+        cell_type_key: cell_type
+        test_size: 0.2
