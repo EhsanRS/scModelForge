@@ -9,8 +9,9 @@ import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 
 if TYPE_CHECKING:
-    from scmodelforge.config.schema import DataConfig, TokenizerConfig
+    from scmodelforge.config.schema import DataConfig, GeneSelectionConfig, SamplingConfig, TokenizerConfig
     from scmodelforge.data.gene_vocab import GeneVocab
+    from scmodelforge.data.sampling import WeightedCellSampler
     from scmodelforge.tokenizers.base import BaseTokenizer, MaskedTokenizedCell, TokenizedCell
     from scmodelforge.tokenizers.masking import MaskingStrategy
 
@@ -84,6 +85,10 @@ class CellDataModule:
         Random seed for reproducible splits.
     adata
         Optional pre-loaded AnnData for testing (skips file loading).
+    sampling_config
+        Weighted sampling configuration. ``None`` uses default (random).
+    gene_selection_config
+        Batch-level gene selection configuration. ``None`` uses default (all).
     """
 
     def __init__(
@@ -95,6 +100,8 @@ class CellDataModule:
         val_split: float = 0.05,
         seed: int = 42,
         adata: object | None = None,
+        sampling_config: SamplingConfig | None = None,
+        gene_selection_config: GeneSelectionConfig | None = None,
     ) -> None:
         self._data_config = data_config
         self._tokenizer_config = tokenizer_config
@@ -103,12 +110,17 @@ class CellDataModule:
         self._val_split = val_split
         self._seed = seed
         self._adata = adata
+        self._sampling_config = sampling_config
+        self._gene_selection_config = gene_selection_config
 
         self._gene_vocab: GeneVocab | None = None
         self._tokenizer: BaseTokenizer | None = None
         self._masking: MaskingStrategy | None = None
-        self._train_dataset: TokenizedCellDataset | None = None
+        self._train_dataset: Dataset | None = None
         self._val_dataset: TokenizedCellDataset | None = None
+        self._sampler: WeightedCellSampler | None = None
+        self._train_collate_fn = None
+        self._use_gene_selection = False
         self._is_setup = False
 
     # ------------------------------------------------------------------
@@ -170,7 +182,12 @@ class CellDataModule:
         )
 
         # 4. Build CellDataset
-        full_dataset = CellDataset(adata, self._gene_vocab, preprocessing)
+        # Include obs_keys needed for weighted sampling label extraction
+        obs_keys = None
+        samp_cfg = self._sampling_config
+        if samp_cfg is not None and samp_cfg.strategy == "weighted":
+            obs_keys = [samp_cfg.label_key]
+        full_dataset = CellDataset(adata, self._gene_vocab, preprocessing, obs_keys=obs_keys)
 
         # 5. Build tokenizer
         tok_cfg = self._tokenizer_config
@@ -201,9 +218,48 @@ class CellDataModule:
             full_dataset, [n_train, n_val], generator=generator,
         )
 
-        # 8. Wrap with TokenizedCellDataset (both get masking)
-        self._train_dataset = TokenizedCellDataset(train_subset, self._tokenizer, self._masking)
+        # 8. Determine gene selection mode
+        gs_cfg = self._gene_selection_config
+        self._use_gene_selection = gs_cfg is not None and gs_cfg.strategy != "all"
+
+        if self._use_gene_selection:
+            # Gene selection mode: train dataset stays raw (pre-tokenization),
+            # collation is handled by GeneSelectionCollator
+            from scmodelforge.data.gene_selection import GeneSelectionCollator
+
+            self._train_dataset = train_subset
+            collator = GeneSelectionCollator(
+                tokenizer=self._tokenizer,
+                masking=self._masking,
+                strategy=gs_cfg.strategy,  # type: ignore[union-attr]
+                n_genes=gs_cfg.n_genes,  # type: ignore[union-attr]
+            )
+            self._train_collate_fn = collator
+        else:
+            # Standard mode: wrap with TokenizedCellDataset
+            self._train_dataset = TokenizedCellDataset(train_subset, self._tokenizer, self._masking)
+            self._train_collate_fn = self._tokenizer._collate
+
+        # Val always uses standard TokenizedCellDataset
         self._val_dataset = TokenizedCellDataset(val_subset, self._tokenizer, self._masking)
+
+        # 9. Build weighted sampler if configured
+        samp_cfg = self._sampling_config
+        if samp_cfg is not None and samp_cfg.strategy == "weighted":
+            from scmodelforge.data.sampling import WeightedCellSampler, extract_labels_from_dataset
+
+            labels = extract_labels_from_dataset(train_subset, label_key=samp_cfg.label_key)
+            self._sampler = WeightedCellSampler(
+                labels=labels,
+                replacement=samp_cfg.replacement,
+                seed=self._seed,
+                curriculum_warmup_epochs=samp_cfg.curriculum_warmup_epochs,
+            )
+            logger.info(
+                "Weighted sampling enabled: %d classes, curriculum_warmup=%d",
+                len(self._sampler.class_weights),
+                samp_cfg.curriculum_warmup_epochs,
+            )
 
         self._is_setup = True
         logger.info("CellDataModule setup: %d train, %d val cells", n_train, n_val)
@@ -213,16 +269,19 @@ class CellDataModule:
     # ------------------------------------------------------------------
 
     def train_dataloader(self) -> DataLoader:
-        """Training DataLoader with shuffle."""
+        """Training DataLoader with shuffle or weighted sampler."""
         if self._train_dataset is None:
             msg = "Call setup() before train_dataloader()."
             raise RuntimeError(msg)
+
+        use_sampler = self._sampler is not None
         return DataLoader(
             self._train_dataset,
             batch_size=self._batch_size,
-            shuffle=True,
+            shuffle=not use_sampler,
+            sampler=self._sampler if use_sampler else None,
             num_workers=self._num_workers,
-            collate_fn=self._tokenizer._collate,  # type: ignore[union-attr]
+            collate_fn=self._train_collate_fn,
             pin_memory=True,
             drop_last=False,
         )

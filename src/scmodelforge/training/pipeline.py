@@ -58,6 +58,8 @@ class TrainingPipeline:
             num_workers=cfg.training.num_workers,
             val_split=cfg.training.val_split,
             seed=cfg.training.seed,
+            sampling_config=cfg.training.sampling,
+            gene_selection_config=cfg.data.gene_selection,
         )
         data_module.setup()
 

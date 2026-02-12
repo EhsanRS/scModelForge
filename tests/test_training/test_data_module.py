@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from scmodelforge.config.schema import GeneSelectionConfig, SamplingConfig
 from scmodelforge.training.data_module import CellDataModule, TokenizedCellDataset
 
 if TYPE_CHECKING:
@@ -225,3 +226,63 @@ class TestCellDataModule:
         )
         dm.setup()
         assert dm.masking is not None
+
+    def test_weighted_sampling_creates_sampler(
+        self, tiny_adata: AnnData, tiny_data_config: DataConfig, tiny_tokenizer_config: TokenizerConfig,
+    ) -> None:
+        samp_cfg = SamplingConfig(strategy="weighted", label_key="cell_type")
+        dm = CellDataModule(
+            data_config=tiny_data_config,
+            tokenizer_config=tiny_tokenizer_config,
+            training_batch_size=4,
+            num_workers=0,
+            val_split=0.2,
+            adata=tiny_adata,
+            sampling_config=samp_cfg,
+        )
+        dm.setup()
+        assert dm._sampler is not None
+        dl = dm.train_dataloader()
+        batch = next(iter(dl))
+        assert "input_ids" in batch
+
+    def test_gene_selection_most_expressed_uses_collator(
+        self, tiny_adata: AnnData, tiny_data_config: DataConfig, tiny_tokenizer_config: TokenizerConfig,
+    ) -> None:
+        from scmodelforge.data.gene_selection import GeneSelectionCollator
+
+        gs_cfg = GeneSelectionConfig(strategy="most_expressed", n_genes=5)
+        dm = CellDataModule(
+            data_config=tiny_data_config,
+            tokenizer_config=tiny_tokenizer_config,
+            training_batch_size=4,
+            num_workers=0,
+            val_split=0.2,
+            adata=tiny_adata,
+            gene_selection_config=gs_cfg,
+        )
+        dm.setup()
+        assert dm._use_gene_selection is True
+        assert isinstance(dm._train_collate_fn, GeneSelectionCollator)
+        dl = dm.train_dataloader()
+        batch = next(iter(dl))
+        assert "input_ids" in batch
+        # Sequence length should be limited
+        assert batch["input_ids"].shape[1] <= 5 + 1  # n_genes + CLS
+
+    def test_defaults_unchanged_behaviour(
+        self, tiny_adata: AnnData, tiny_data_config: DataConfig, tiny_tokenizer_config: TokenizerConfig,
+    ) -> None:
+        """Default configs: no sampler, no gene selection — same as before."""
+        dm = CellDataModule(
+            data_config=tiny_data_config,
+            tokenizer_config=tiny_tokenizer_config,
+            training_batch_size=4,
+            num_workers=0,
+            val_split=0.2,
+            adata=tiny_adata,
+        )
+        dm.setup()
+        assert dm._sampler is None
+        assert dm._use_gene_selection is False
+        assert isinstance(dm._train_dataset, TokenizedCellDataset)

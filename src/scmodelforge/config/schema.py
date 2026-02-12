@@ -135,6 +135,25 @@ class ShardConfig:
 
 
 @dataclass
+class GeneSelectionConfig:
+    """Batch-level gene selection configuration.
+
+    Attributes
+    ----------
+    strategy
+        Gene selection strategy: ``"all"`` (keep all genes),
+        ``"most_expressed"`` (top-k by batch expression sum),
+        or ``"random_expressed"`` (random subset of expressed genes).
+    n_genes
+        Number of genes to keep per batch. Required when
+        ``strategy != "all"``.
+    """
+
+    strategy: str = "all"
+    n_genes: int | None = None
+
+
+@dataclass
 class DataConfig:
     """Configuration for data loading and preprocessing."""
 
@@ -148,6 +167,7 @@ class DataConfig:
     multi_species: MultiSpeciesConfig = field(default_factory=MultiSpeciesConfig)
     perturbation: PerturbationConfig = field(default_factory=PerturbationConfig)
     shards: ShardConfig = field(default_factory=ShardConfig)
+    gene_selection: GeneSelectionConfig = field(default_factory=GeneSelectionConfig)
 
 
 @dataclass
@@ -218,6 +238,30 @@ class SchedulerConfig:
 
 
 @dataclass
+class SamplingConfig:
+    """Weighted sampling configuration.
+
+    Attributes
+    ----------
+    strategy
+        Sampling strategy: ``"random"`` (uniform shuffle) or
+        ``"weighted"`` (inverse-frequency weighted by class label).
+    label_key
+        ``obs`` column used for class labels when ``strategy="weighted"``.
+    replacement
+        Whether to sample with replacement (standard for weighted sampling).
+    curriculum_warmup_epochs
+        Number of epochs over which to ramp from uniform to full
+        inverse-frequency weights. ``0`` disables curriculum.
+    """
+
+    strategy: str = "random"
+    label_key: str = "cell_type"
+    replacement: bool = True
+    curriculum_warmup_epochs: int = 0
+
+
+@dataclass
 class TrainingConfig:
     """Configuration for the training loop."""
 
@@ -241,6 +285,7 @@ class TrainingConfig:
     num_workers: int = 4
     val_split: float = 0.05
     resume_from: str | None = None
+    sampling: SamplingConfig = field(default_factory=SamplingConfig)
 
 
 @dataclass
