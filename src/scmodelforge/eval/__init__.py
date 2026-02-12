@@ -2,6 +2,12 @@
 
 from scmodelforge.eval.base import BaseBenchmark, BenchmarkResult
 from scmodelforge.eval.callback import AssessmentCallback
+from scmodelforge.eval.cz_benchmarks import (
+    CZBatchIntegrationBenchmark,
+    CZClusteringBenchmark,
+    CZEmbeddingBenchmark,
+    CZLabelPredictionBenchmark,
+)
 from scmodelforge.eval.embedding_quality import EmbeddingQualityBenchmark
 from scmodelforge.eval.grn import GRNBenchmark
 from scmodelforge.eval.harness import EvalHarness
@@ -13,6 +19,10 @@ __all__ = [
     "AssessmentCallback",
     "BaseBenchmark",
     "BenchmarkResult",
+    "CZBatchIntegrationBenchmark",
+    "CZClusteringBenchmark",
+    "CZEmbeddingBenchmark",
+    "CZLabelPredictionBenchmark",
     "EmbeddingQualityBenchmark",
     "EvalHarness",
     "GRNBenchmark",
