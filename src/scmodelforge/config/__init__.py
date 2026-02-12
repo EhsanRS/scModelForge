@@ -8,6 +8,7 @@ from scmodelforge.config.schema import (
     TokenizerConfig,
     TrainingConfig,
     load_config,
+    save_config,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "TokenizerConfig",
     "TrainingConfig",
     "load_config",
+    "save_config",
 ]

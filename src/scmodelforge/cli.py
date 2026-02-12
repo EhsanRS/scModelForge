@@ -112,5 +112,66 @@ def finetune(config: str, checkpoint: str) -> None:
     FineTunePipeline(cfg).run()
 
 
+@main.command(name="export")
+@click.option("--checkpoint", required=True, type=click.Path(exists=True), help="Lightning checkpoint path.")
+@click.option("--config", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
+@click.option("--output", required=True, type=click.Path(), help="Output directory for HF-format model.")
+@click.option("--gene-vocab", default=None, type=click.Path(exists=True), help="Gene vocabulary JSON file.")
+@click.option("--no-safetensors", is_flag=True, default=False, help="Use torch format instead of safetensors.")
+def export_model(checkpoint: str, config: str, output: str, gene_vocab: str | None, no_safetensors: bool) -> None:
+    """Export a Lightning checkpoint to HuggingFace-format directory."""
+    import torch
+
+    from scmodelforge.config import load_config
+    from scmodelforge.data.gene_vocab import GeneVocab
+    from scmodelforge.models.hub import save_pretrained
+    from scmodelforge.models.registry import get_model
+
+    cfg = load_config(config)
+
+    # Load vocab if provided
+    vocab = GeneVocab.from_file(gene_vocab) if gene_vocab else None
+    if vocab is not None:
+        cfg.model.vocab_size = len(vocab)
+    elif cfg.model.vocab_size is None:
+        raise click.ClickException("model.vocab_size must be set in config or provide --gene-vocab")
+
+    # Build model and load checkpoint
+    nn_model = get_model(cfg.model.architecture, cfg.model)
+    ckpt = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    state_dict = ckpt.get("state_dict", ckpt)
+    cleaned = {k.removeprefix("model."): v for k, v in state_dict.items()}
+    nn_model.load_state_dict(cleaned)
+
+    # Save in HF format
+    save_dir = save_pretrained(
+        nn_model,
+        output,
+        model_config=cfg.model,
+        tokenizer_config=cfg.tokenizer,
+        gene_vocab=vocab,
+        safe_serialization=not no_safetensors,
+    )
+    click.echo(f"Model exported to {save_dir}")
+
+
+@main.command()
+@click.option("--model-dir", required=True, type=click.Path(exists=True), help="HF-format model directory.")
+@click.option("--repo-id", required=True, help="HuggingFace Hub repo ID (e.g. user/model-name).")
+@click.option("--private", is_flag=True, default=False, help="Create a private repository.")
+@click.option("--commit-message", default="Upload scModelForge model", help="Commit message.")
+def push(model_dir: str, repo_id: str, private: bool, commit_message: str) -> None:
+    """Push an exported model directory to HuggingFace Hub."""
+    from scmodelforge.models.hub import push_to_hub
+
+    url = push_to_hub(
+        model_dir,
+        repo_id,
+        private=private,
+        commit_message=commit_message,
+    )
+    click.echo(f"Model pushed to {url}")
+
+
 if __name__ == "__main__":
     main()

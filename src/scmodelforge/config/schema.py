@@ -284,6 +284,24 @@ class ScModelForgeConfig:
     finetune: FinetuneConfig | None = None
 
 
+def save_config(config: ScModelForgeConfig, path: str | Path) -> None:
+    """Save a ScModelForgeConfig to a YAML file.
+
+    Parameters
+    ----------
+    config
+        Configuration object to save.
+    path
+        Output YAML file path.
+    """
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    structured = OmegaConf.structured(config)
+    OmegaConf.save(structured, path)
+
+
 def load_config(path: str | Path) -> ScModelForgeConfig:
     """Load a ScModelForgeConfig from a YAML file.
 
