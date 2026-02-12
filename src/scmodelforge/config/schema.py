@@ -62,6 +62,33 @@ class CensusConfig:
 
 
 @dataclass
+class MultiSpeciesConfig:
+    """Multi-species gene vocabulary configuration.
+
+    Attributes
+    ----------
+    enabled
+        Whether to enable multi-species gene mapping.
+    organisms
+        List of organisms to include.
+    canonical_organism
+        Canonical namespace organism (genes from other organisms
+        are mapped to this organism's gene names).
+    include_one2many
+        Whether to include one-to-many orthologs.
+    ortholog_table
+        Path to a custom ortholog TSV file. ``None`` uses the
+        bundled Ensembl human-mouse table.
+    """
+
+    enabled: bool = False
+    organisms: list[str] = field(default_factory=lambda: ["human", "mouse"])
+    canonical_organism: str = "human"
+    include_one2many: bool = False
+    ortholog_table: str | None = None
+
+
+@dataclass
 class DataConfig:
     """Configuration for data loading and preprocessing."""
 
@@ -72,6 +99,7 @@ class DataConfig:
     max_genes: int = 2048
     num_workers: int = 4
     census: CensusConfig = field(default_factory=CensusConfig)
+    multi_species: MultiSpeciesConfig = field(default_factory=MultiSpeciesConfig)
 
 
 @dataclass

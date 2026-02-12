@@ -114,6 +114,43 @@ class GeneVocab:
             return cls(gene_to_idx)
         raise ValueError(f"Expected JSON list or dict, got {type(data)}")
 
+    @classmethod
+    def multi_species(
+        cls,
+        organisms: tuple[str, ...] | list[str] = ("human", "mouse"),
+        include_one2many: bool = False,
+        base_genes: list[str] | None = None,
+    ) -> GeneVocab:
+        """Build a vocabulary for multi-species analysis.
+
+        Uses the bundled ortholog table to create a vocabulary in the
+        canonical (human) namespace.  Mouse genes are mapped to their
+        human orthologs automatically.
+
+        Parameters
+        ----------
+        organisms
+            Organisms to include.
+        include_one2many
+            Whether to include one-to-many orthologs.
+        base_genes
+            Optional seed list of human gene names. If ``None`` the
+            full canonical gene set from the ortholog table is used.
+
+        Returns
+        -------
+        GeneVocab
+            Vocabulary containing canonical human gene names.
+        """
+        from scmodelforge.data.ortholog_mapper import OrthologMapper
+
+        mapper = OrthologMapper(
+            organisms=list(organisms),
+            include_one2many=include_one2many,
+        )
+        genes = list(base_genes) if base_genes is not None else mapper.get_all_canonical_genes()
+        return cls.from_genes(genes)
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------

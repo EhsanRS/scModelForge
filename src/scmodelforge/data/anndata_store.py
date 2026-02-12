@@ -17,6 +17,7 @@ from scmodelforge.data._utils import get_row_as_dense
 
 if TYPE_CHECKING:
     from scmodelforge.data.gene_vocab import GeneVocab
+    from scmodelforge.data.ortholog_mapper import OrthologMapper
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,12 @@ class AnnDataStore:
         Observation metadata keys to carry through (e.g.,
         ``["cell_type", "batch"]``). Keys not present in a dataset
         are filled with ``"unknown"``.
+    ortholog_mapper
+        Optional :class:`~scmodelforge.data.ortholog_mapper.OrthologMapper`
+        for translating gene names before alignment.
+    source_organism
+        Organism of the input datasets (e.g. ``"mouse"``). Required
+        when *ortholog_mapper* is provided.
     """
 
     def __init__(
@@ -46,9 +53,13 @@ class AnnDataStore:
         adatas: list[ad.AnnData | str | Path],
         gene_vocab: GeneVocab,
         obs_keys: list[str] | None = None,
+        ortholog_mapper: OrthologMapper | None = None,
+        source_organism: str | None = None,
     ) -> None:
         self.gene_vocab = gene_vocab
         self.obs_keys = obs_keys or []
+        self._ortholog_mapper = ortholog_mapper
+        self._source_organism = source_organism
 
         self._adatas: list[ad.AnnData] = []
         self._alignments: list[tuple[np.ndarray, np.ndarray]] = []
@@ -59,9 +70,16 @@ class AnnDataStore:
             adata = self._load(adata_or_path)
             self._adatas.append(adata)
 
+            # Translate gene names if multi-species mapping is configured
+            gene_names = list(adata.var_names)
+            if self._ortholog_mapper is not None and self._source_organism is not None:
+                gene_names = self._ortholog_mapper.translate_gene_names(
+                    gene_names, self._source_organism
+                )
+
             # Compute alignment: which columns in this adata map to which
             # positions in the gene_vocab
-            source_idx, vocab_idx = gene_vocab.get_alignment_indices(list(adata.var_names))
+            source_idx, vocab_idx = gene_vocab.get_alignment_indices(gene_names)
             self._alignments.append((source_idx, vocab_idx))
 
             n_overlap = len(source_idx)
