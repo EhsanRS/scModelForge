@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+from typing import TYPE_CHECKING
+
 import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from scmodelforge.data.gene_vocab import GeneVocab
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_tensor(x: np.ndarray | torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
@@ -138,3 +146,73 @@ def digitize_expression(values: torch.Tensor, bin_edges: np.ndarray) -> torch.Te
     # Zero expression always maps to bin 0
     bin_ids[values == 0] = 0
     return bin_ids.long()
+
+
+def load_gene_embeddings(path: str, gene_vocab: GeneVocab) -> torch.Tensor:
+    """Load pretrained gene embeddings and align to a gene vocabulary.
+
+    Supported formats:
+
+    - ``.pt`` / ``.pth``: expects a dict with ``"gene_names"`` (list of str)
+      and ``"embeddings"`` (Tensor of shape ``(n, d)``).
+    - ``.npy``: expects a NumPy ``.npy`` file saved from a dict with the
+      same two keys (use :func:`numpy.save` on the dict).
+
+    Genes present in the file but absent from *gene_vocab* are ignored.
+    Genes in *gene_vocab* but missing from the file receive zero vectors.
+
+    Parameters
+    ----------
+    path
+        File path to the embedding file.
+    gene_vocab
+        Target gene vocabulary.
+
+    Returns
+    -------
+    torch.Tensor
+        Embedding matrix of shape ``(len(gene_vocab), embedding_dim)``.
+
+    Raises
+    ------
+    ValueError
+        If the file extension is unsupported or the data lacks required keys.
+    """
+    if path.endswith((".pt", ".pth")):
+        # torch.load is used here intentionally for loading pretrained gene
+        # embedding weights (a trusted local artifact, not user-uploaded data).
+        data = torch.load(path, map_location="cpu", weights_only=False)
+    elif path.endswith(".npy"):
+        # numpy.load with allow_pickle is needed to load dict-style .npy files
+        # containing gene embedding data (trusted local artifact).
+        data = np.load(path, allow_pickle=True).item()  # noqa: S301
+        data["embeddings"] = torch.as_tensor(data["embeddings"], dtype=torch.float32)
+    else:
+        msg = f"Unsupported embedding file format: {path!r}. Use .pt, .pth, or .npy."
+        raise ValueError(msg)
+
+    for key in ("gene_names", "embeddings"):
+        if key not in data:
+            msg = f"Embedding file must contain key '{key}', got: {sorted(data.keys())}"
+            raise ValueError(msg)
+
+    gene_names: list[str] = data["gene_names"]
+    embeddings: torch.Tensor = data["embeddings"]
+    embedding_dim = embeddings.shape[1]
+
+    # Build aligned matrix
+    aligned = torch.zeros(len(gene_vocab), embedding_dim, dtype=torch.float32)
+    n_matched = 0
+    for i, name in enumerate(gene_names):
+        if name in gene_vocab:
+            idx = gene_vocab[name]
+            aligned[idx] = embeddings[i]
+            n_matched += 1
+
+    logger.info(
+        "Loaded gene embeddings: %d/%d genes matched (dim=%d)",
+        n_matched,
+        len(gene_vocab),
+        embedding_dim,
+    )
+    return aligned

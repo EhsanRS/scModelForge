@@ -199,5 +199,11 @@ class TrainingPipeline:
         if n_devices <= 0:
             return 1, "auto"
 
+        # Use FSDP strategy when configured and multi-GPU
+        if cfg.fsdp is not None and n_devices > 1:
+            from scmodelforge.training.fsdp import build_fsdp_strategy
+
+            return n_devices, build_fsdp_strategy(cfg.fsdp)
+
         strategy = cfg.strategy if n_devices > 1 else "auto"
         return n_devices, strategy

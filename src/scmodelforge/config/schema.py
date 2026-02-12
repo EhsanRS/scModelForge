@@ -168,6 +168,9 @@ class DataConfig:
     perturbation: PerturbationConfig = field(default_factory=PerturbationConfig)
     shards: ShardConfig = field(default_factory=ShardConfig)
     gene_selection: GeneSelectionConfig = field(default_factory=GeneSelectionConfig)
+    streaming: bool = False
+    streaming_chunk_size: int = 10_000
+    streaming_shuffle_buffer: int = 10_000
 
 
 @dataclass
@@ -189,6 +192,8 @@ class TokenizerConfig:
     prepend_cls: bool = True
     n_bins: int = 51
     binning_method: str = "uniform"
+    embedding_path: str | None = None
+    embedding_dim: int = 200
     masking: MaskingConfig = field(default_factory=MaskingConfig)
 
 
@@ -262,6 +267,30 @@ class SamplingConfig:
 
 
 @dataclass
+class FSDPConfig:
+    """Fully Sharded Data Parallel configuration.
+
+    Attributes
+    ----------
+    sharding_strategy
+        FSDP sharding strategy: ``"FULL_SHARD"``, ``"SHARD_GRAD_OP"``,
+        ``"NO_SHARD"``, or ``"HYBRID_SHARD"``.
+    cpu_offload
+        Whether to offload parameters and gradients to CPU.
+    activation_checkpointing
+        Whether to enable activation checkpointing on
+        ``nn.TransformerEncoderLayer`` modules.
+    min_num_params
+        Minimum number of parameters for auto-wrap policy.
+    """
+
+    sharding_strategy: str = "FULL_SHARD"
+    cpu_offload: bool = False
+    activation_checkpointing: bool = False
+    min_num_params: int = 1_000_000
+
+
+@dataclass
 class TrainingConfig:
     """Configuration for the training loop."""
 
@@ -286,6 +315,7 @@ class TrainingConfig:
     val_split: float = 0.05
     resume_from: str | None = None
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
+    fsdp: FSDPConfig | None = None
 
 
 @dataclass

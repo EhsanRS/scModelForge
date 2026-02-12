@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, IterableDataset, random_split
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from scmodelforge.config.schema import DataConfig, GeneSelectionConfig, SamplingConfig, TokenizerConfig
     from scmodelforge.data.gene_vocab import GeneVocab
     from scmodelforge.data.sampling import WeightedCellSampler
@@ -61,6 +63,36 @@ class TokenizedCellDataset(Dataset):
         if self.masking is not None:
             cell = self.masking.apply(cell)
         return cell
+
+
+class _StreamingTokenizedDataset(IterableDataset):
+    """Wraps a :class:`StreamingCellDataset` with tokenization and masking.
+
+    Each yielded cell dict is tokenized and optionally masked in the
+    ``__iter__`` loop.
+    """
+
+    def __init__(
+        self,
+        streaming_dataset: IterableDataset,
+        tokenizer: BaseTokenizer,
+        masking: MaskingStrategy | None = None,
+    ) -> None:
+        super().__init__()
+        self.streaming_dataset = streaming_dataset
+        self.tokenizer = tokenizer
+        self.masking = masking
+
+    def __iter__(self) -> Iterator[TokenizedCell | MaskedTokenizedCell]:
+        for sample in self.streaming_dataset:
+            cell = self.tokenizer.tokenize(
+                expression=sample["expression"],
+                gene_indices=sample["gene_indices"],
+                metadata=sample.get("metadata"),
+            )
+            if self.masking is not None:
+                cell = self.masking.apply(cell)
+            yield cell
 
 
 class CellDataModule:
@@ -116,11 +148,12 @@ class CellDataModule:
         self._gene_vocab: GeneVocab | None = None
         self._tokenizer: BaseTokenizer | None = None
         self._masking: MaskingStrategy | None = None
-        self._train_dataset: Dataset | None = None
+        self._train_dataset: Dataset | IterableDataset | None = None
         self._val_dataset: TokenizedCellDataset | None = None
         self._sampler: WeightedCellSampler | None = None
         self._train_collate_fn = None
         self._use_gene_selection = False
+        self._streaming = False
         self._is_setup = False
 
     # ------------------------------------------------------------------
@@ -208,7 +241,13 @@ class CellDataModule:
             vocab_size=len(self._gene_vocab),
         )
 
-        # 7. Train/val split
+        # 7. Streaming mode
+        if self._data_config.streaming:
+            self._streaming = True
+            self._setup_streaming(adata, preprocessing)
+            return
+
+        # 7b. Train/val split (map-style path)
         n_total = len(full_dataset)
         n_val = max(1, int(n_total * self._val_split))
         n_train = n_total - n_val
@@ -264,6 +303,42 @@ class CellDataModule:
         self._is_setup = True
         logger.info("CellDataModule setup: %d train, %d val cells", n_train, n_val)
 
+    def _setup_streaming(self, adata: Any, preprocessing: Any) -> None:
+        """Set up streaming mode: train uses IterableDataset, val uses map-style."""
+        from scmodelforge.data.dataset import CellDataset
+        from scmodelforge.data.streaming import StreamingCellDataset
+
+        dcfg = self._data_config
+
+        # Streaming train dataset
+        streaming_ds = StreamingCellDataset(
+            file_paths=dcfg.paths,
+            gene_vocab=self._gene_vocab,  # type: ignore[arg-type]
+            preprocessing=preprocessing,
+            chunk_size=dcfg.streaming_chunk_size,
+            shuffle_buffer_size=dcfg.streaming_shuffle_buffer,
+            seed=self._seed,
+        )
+        self._train_dataset = _StreamingTokenizedDataset(
+            streaming_ds, self._tokenizer, self._masking,  # type: ignore[arg-type]
+        )
+        self._train_collate_fn = self._tokenizer._collate  # type: ignore[union-attr]
+
+        # Val uses small map-style dataset for reproducibility
+        full_dataset = CellDataset(adata, self._gene_vocab, preprocessing)  # type: ignore[arg-type]
+        n_total = len(full_dataset)
+        n_val = max(1, int(n_total * self._val_split))
+        generator = torch.Generator().manual_seed(self._seed)
+        _, val_subset = random_split(
+            full_dataset, [n_total - n_val, n_val], generator=generator,
+        )
+        self._val_dataset = TokenizedCellDataset(
+            val_subset, self._tokenizer, self._masking,  # type: ignore[arg-type]
+        )
+
+        self._is_setup = True
+        logger.info("CellDataModule setup (streaming): %d files, %d val cells", len(dcfg.paths), n_val)
+
     # ------------------------------------------------------------------
     # DataLoaders
     # ------------------------------------------------------------------
@@ -273,6 +348,18 @@ class CellDataModule:
         if self._train_dataset is None:
             msg = "Call setup() before train_dataloader()."
             raise RuntimeError(msg)
+
+        # Streaming datasets handle their own shuffling
+        if self._streaming:
+            return DataLoader(
+                self._train_dataset,
+                batch_size=self._batch_size,
+                shuffle=False,
+                num_workers=self._num_workers,
+                collate_fn=self._train_collate_fn,
+                pin_memory=True,
+                drop_last=False,
+            )
 
         use_sampler = self._sampler is not None
         return DataLoader(
