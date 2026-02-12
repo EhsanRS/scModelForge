@@ -311,6 +311,7 @@ class CellDataModule:
         dcfg = self._data_config
 
         # Streaming train dataset
+        cloud_cfg = dcfg.cloud
         streaming_ds = StreamingCellDataset(
             file_paths=dcfg.paths,
             gene_vocab=self._gene_vocab,  # type: ignore[arg-type]
@@ -318,6 +319,8 @@ class CellDataModule:
             chunk_size=dcfg.streaming_chunk_size,
             shuffle_buffer_size=dcfg.streaming_shuffle_buffer,
             seed=self._seed,
+            storage_options=cloud_cfg.storage_options or None,
+            cache_dir=cloud_cfg.cache_dir,
         )
         self._train_dataset = _StreamingTokenizedDataset(
             streaming_ds, self._tokenizer, self._masking,  # type: ignore[arg-type]

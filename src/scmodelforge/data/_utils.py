@@ -180,7 +180,20 @@ def load_adata(
     if data_config.source == "local":
         import anndata as ad
 
-        adata_list = [ad.read_h5ad(p) for p in data_config.paths]
+        from scmodelforge.data.cloud import is_cloud_path
+        from scmodelforge.data.cloud import read_h5ad as cloud_read_h5ad
+
+        cloud_cfg = data_config.cloud
+        adata_list = []
+        for p in data_config.paths:
+            if is_cloud_path(p):
+                adata_list.append(cloud_read_h5ad(
+                    p,
+                    storage_options=cloud_cfg.storage_options or None,
+                    cache_dir=cloud_cfg.cache_dir,
+                ))
+            else:
+                adata_list.append(ad.read_h5ad(p))
         if len(adata_list) == 1:
             return adata_list[0]
         return ad.concat(adata_list)

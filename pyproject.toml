@@ -37,6 +37,7 @@ dependencies = [
 census = ["cellxgene-census>=1.0"]
 perturbation = ["pertpy>=0.6"]
 eval = ["scib>=1.1", "pertpy>=0.6"]
+cloud = ["fsspec>=2023.1", "s3fs>=2023.1", "gcsfs>=2023.1"]
 hub = ["huggingface-hub>=0.20", "safetensors>=0.4"]
 peft = ["peft>=0.6"]
 wandb = ["wandb>=0.15"]
@@ -47,6 +48,7 @@ dev = [
     "huggingface-hub>=0.20",
     "safetensors>=0.4",
     "peft>=0.6",
+    "fsspec>=2023.1",
     "ruff>=0.4",
     "mypy>=1.5",
     "pre-commit>=3.0",
@@ -59,7 +61,7 @@ docs = [
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
 ]
-all = ["scModelForge[census,perturbation,eval,hub,peft,wandb,dev,docs]"]
+all = ["scModelForge[census,perturbation,eval,cloud,hub,peft,wandb,dev,docs]"]
 
 [project.scripts]
 scmodelforge = "scmodelforge.cli:main"

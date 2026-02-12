@@ -154,6 +154,26 @@ class GeneSelectionConfig:
 
 
 @dataclass
+class CloudStorageConfig:
+    """Cloud storage configuration for S3/GCS/Azure access.
+
+    Attributes
+    ----------
+    storage_options
+        fsspec storage_options dict passed to the filesystem backend.
+        S3: ``{"key": "...", "secret": "...", "endpoint_url": "..."}``.
+        GCS: ``{"token": "/path/to/creds.json"}``.
+        Also supports env vars (``AWS_ACCESS_KEY_ID`` etc.) automatically.
+    cache_dir
+        Local directory for caching cloud files in backed/streaming mode.
+        ``None`` uses a temporary directory.
+    """
+
+    storage_options: dict[str, Any] = field(default_factory=dict)
+    cache_dir: str | None = None
+
+
+@dataclass
 class DataConfig:
     """Configuration for data loading and preprocessing."""
 
@@ -168,6 +188,7 @@ class DataConfig:
     perturbation: PerturbationConfig = field(default_factory=PerturbationConfig)
     shards: ShardConfig = field(default_factory=ShardConfig)
     gene_selection: GeneSelectionConfig = field(default_factory=GeneSelectionConfig)
+    cloud: CloudStorageConfig = field(default_factory=CloudStorageConfig)
     streaming: bool = False
     streaming_chunk_size: int = 10_000
     streaming_shuffle_buffer: int = 10_000

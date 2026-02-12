@@ -30,7 +30,7 @@ def train(config: str, resume: str | None) -> None:
 @main.command()
 @click.option("--config", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
 @click.option("--model", required=True, type=click.Path(exists=True), help="Model checkpoint path.")
-@click.option("--data", required=True, type=click.Path(exists=True), help="Assessment .h5ad file.")
+@click.option("--data", required=True, type=str, help="Assessment .h5ad file (local path or cloud URL).")
 @click.option("--output", default=None, type=click.Path(), help="Save results as JSON.")
 def benchmark(config: str, model: str, data: str, output: str | None) -> None:
     """Run evaluation benchmarks on a trained model."""
@@ -48,7 +48,18 @@ def benchmark(config: str, model: str, data: str, output: str | None) -> None:
     cfg = load_config(config)
 
     # Load data
-    adata = ad.read_h5ad(data)
+    from scmodelforge.data.cloud import is_cloud_path
+    from scmodelforge.data.cloud import read_h5ad as cloud_read_h5ad
+
+    if is_cloud_path(data):
+        cloud_cfg = cfg.data.cloud
+        adata = cloud_read_h5ad(
+            data,
+            storage_options=cloud_cfg.storage_options or None,
+            cache_dir=cloud_cfg.cache_dir,
+        )
+    else:
+        adata = ad.read_h5ad(data)
     click.echo(f"Loaded {adata.n_obs} cells from {data}")
 
     # Build vocab and tokenizer
@@ -192,16 +203,30 @@ def shard(config: str, output_dir: str, shard_size: int, gene_vocab: str | None)
         # Build vocab from the first data file
         import anndata as ad
 
+        from scmodelforge.data.cloud import is_cloud_path
+        from scmodelforge.data.cloud import read_h5ad as cloud_read_h5ad
+
         if not cfg.data.paths:
             raise click.ClickException("No data paths in config and no --gene-vocab provided")
-        adata = ad.read_h5ad(cfg.data.paths[0])
-        vocab = GeneVocab.from_adata(adata)
+        first_path = cfg.data.paths[0]
+        if is_cloud_path(first_path):
+            cloud_cfg = cfg.data.cloud
+            first_adata = cloud_read_h5ad(
+                first_path,
+                storage_options=cloud_cfg.storage_options or None,
+                cache_dir=cloud_cfg.cache_dir,
+            )
+        else:
+            first_adata = ad.read_h5ad(first_path)
+        vocab = GeneVocab.from_adata(first_adata)
 
+    cloud_cfg = cfg.data.cloud
     out = convert_to_shards(
         sources=cfg.data.paths,
         gene_vocab=vocab,
         output_dir=output_dir,
         shard_size=shard_size,
+        storage_options=cloud_cfg.storage_options or None,
     )
     click.echo(f"Shards written to {out}")
 

@@ -32,6 +32,7 @@ def convert_to_shards(
     shard_size: int = 500_000,
     obs_keys: list[str] | None = None,
     preprocessing: PreprocessingPipeline | None = None,
+    storage_options: dict | None = None,
 ) -> Path:
     """Convert .h5ad files to a shard directory of memory-mapped arrays.
 
@@ -72,7 +73,17 @@ def convert_to_shards(
     all_obs_rows: list[dict[str, str]] = []
 
     for source in sources:
-        adata: _ad.AnnData = source if isinstance(source, _ad.AnnData) else _ad.read_h5ad(Path(source))
+        if isinstance(source, _ad.AnnData):
+            adata: _ad.AnnData = source
+        else:
+            from scmodelforge.data.cloud import is_cloud_path
+            from scmodelforge.data.cloud import read_h5ad as cloud_read_h5ad
+
+            source_str = str(source)
+            if is_cloud_path(source_str):
+                adata = cloud_read_h5ad(source_str, storage_options=storage_options)
+            else:
+                adata = _ad.read_h5ad(Path(source))
 
         source_idx, vocab_idx = gene_vocab.get_alignment_indices(
             list(adata.var_names)

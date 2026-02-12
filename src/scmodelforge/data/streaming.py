@@ -59,6 +59,8 @@ class StreamingCellDataset(IterableDataset):
         shuffle_buffer_size: int = 10_000,
         obs_keys: list[str] | None = None,
         seed: int = 0,
+        storage_options: dict | None = None,
+        cache_dir: str | None = None,
     ) -> None:
         super().__init__()
         self.file_paths = list(file_paths)
@@ -68,6 +70,8 @@ class StreamingCellDataset(IterableDataset):
         self.shuffle_buffer_size = shuffle_buffer_size
         self.obs_keys = obs_keys or []
         self.seed = seed
+        self.storage_options = storage_options
+        self.cache_dir = cache_dir
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
         """Yield cells with worker-aware file sharding."""
@@ -106,9 +110,20 @@ class StreamingCellDataset(IterableDataset):
         """Iterate through files, reading chunks and aligning genes."""
         import anndata as ad
 
+        from scmodelforge.data.cloud import is_cloud_path
+        from scmodelforge.data.cloud import read_h5ad as cloud_read_h5ad
+
         for file_path in files:
             try:
-                adata = ad.read_h5ad(file_path, backed="r")
+                if is_cloud_path(file_path):
+                    adata = cloud_read_h5ad(
+                        file_path,
+                        storage_options=self.storage_options,
+                        backed="r",
+                        cache_dir=self.cache_dir,
+                    )
+                else:
+                    adata = ad.read_h5ad(file_path, backed="r")
             except Exception:
                 logger.warning("Failed to open %s, skipping.", file_path)
                 continue

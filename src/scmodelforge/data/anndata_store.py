@@ -96,11 +96,22 @@ class AnnDataStore:
             self._cumulative_sizes.append(total)
 
     @staticmethod
-    def _load(adata_or_path: ad.AnnData | str | Path) -> ad.AnnData:
-        """Load AnnData from a path or return as-is."""
+    def _load(
+        adata_or_path: ad.AnnData | str | Path,
+        storage_options: dict | None = None,
+        cache_dir: str | None = None,
+    ) -> ad.AnnData:
+        """Load AnnData from a path (local or cloud) or return as-is."""
         if isinstance(adata_or_path, ad.AnnData):
             return adata_or_path
-        path = Path(adata_or_path)
+        path_str = str(adata_or_path)
+        from scmodelforge.data.cloud import is_cloud_path
+
+        if is_cloud_path(path_str):
+            from scmodelforge.data.cloud import read_h5ad as cloud_read_h5ad
+
+            return cloud_read_h5ad(path_str, storage_options=storage_options, cache_dir=cache_dir)
+        path = Path(path_str)
         if not path.exists():
             raise FileNotFoundError(f"AnnData file not found: {path}")
         return ad.read_h5ad(path)

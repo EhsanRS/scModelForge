@@ -1,6 +1,7 @@
 """Data loading and preprocessing for single-cell datasets."""
 
 from scmodelforge.data.census import build_obs_value_filter, load_census_adata
+from scmodelforge.data.cloud import is_cloud_path
 from scmodelforge.data.dataloader import CellDataLoader
 from scmodelforge.data.dataset import CellDataset, ShardedCellDataset
 from scmodelforge.data.distributed import DistributedShardSampler
@@ -35,6 +36,7 @@ __all__ = [
     "build_obs_value_filter",
     "convert_to_shards",
     "extract_labels_from_dataset",
+    "is_cloud_path",
     "load_census_adata",
     "parse_perturbation_metadata",
 ]
