@@ -79,6 +79,7 @@ See `prompts/` for detailed implementation guides:
 ## Workflow
 
 - **Always commit and push** after completing a feature, bug fix, or any meaningful addition. Do not let work accumulate uncommitted. Each logical unit of work should be a separate commit pushed to the remote.
+- **Update CLAUDE.md** after implementing stages, phases, or new features. Keep the file structure, test count, CLI commands, and other documentation current so it accurately reflects the codebase.
 
 ## Important Notes
 
