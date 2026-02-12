@@ -34,6 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 census = ["cellxgene-census>=1.0"]
+perturbation = ["pertpy>=0.6"]
 eval = ["scib>=1.1", "pertpy>=0.6"]
 hub = ["huggingface-hub>=0.20", "safetensors>=0.4"]
 peft = ["peft>=0.6"]
@@ -57,7 +58,7 @@ docs = [
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
 ]
-all = ["scModelForge[census,eval,hub,peft,wandb,dev,docs]"]
+all = ["scModelForge[census,perturbation,eval,hub,peft,wandb,dev,docs]"]
 
 [project.scripts]
 scmodelforge = "scmodelforge.cli:main"

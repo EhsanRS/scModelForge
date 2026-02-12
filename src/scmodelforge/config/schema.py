@@ -89,6 +89,33 @@ class MultiSpeciesConfig:
 
 
 @dataclass
+class PerturbationConfig:
+    """Perturbation data configuration.
+
+    Attributes
+    ----------
+    enabled
+        Whether to enable perturbation-aware data handling.
+    perturbation_key
+        Column in ``adata.obs`` containing perturbation labels.
+        ``None`` triggers auto-detection.
+    control_label
+        Label used for control cells (case-insensitive).
+    dose_key
+        Column in ``adata.obs`` for dose values. ``None`` triggers
+        auto-detection.
+    dose_unit
+        Unit of dose values (e.g. ``"uM"``).
+    """
+
+    enabled: bool = False
+    perturbation_key: str | None = None
+    control_label: str = "control"
+    dose_key: str | None = None
+    dose_unit: str | None = None
+
+
+@dataclass
 class DataConfig:
     """Configuration for data loading and preprocessing."""
 
@@ -100,6 +127,7 @@ class DataConfig:
     num_workers: int = 4
     census: CensusConfig = field(default_factory=CensusConfig)
     multi_species: MultiSpeciesConfig = field(default_factory=MultiSpeciesConfig)
+    perturbation: PerturbationConfig = field(default_factory=PerturbationConfig)
 
 
 @dataclass
