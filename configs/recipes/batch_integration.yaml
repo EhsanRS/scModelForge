@@ -1,0 +1,91 @@
+# scModelForge Recipe: Batch Integration (Fine-tuning)
+#
+# Fine-tune a pretrained model for batch correction by training it to
+# predict batch labels. The learned representations become batch-invariant,
+# improving downstream cross-batch analyses.
+#
+# Usage:
+#   scmodelforge finetune \
+#     --config configs/recipes/batch_integration.yaml \
+#     --checkpoint path/to/pretrained.ckpt
+#
+# Customize:
+#   1. Set data.paths to your multi-batch .h5ad file
+#   2. Set finetune.label_key to the batch column in obs
+#   3. Set eval benchmarks to measure batch mixing quality
+
+data:
+  source: local
+  paths:
+    - ./data/multi_batch_dataset.h5ad   # Replace with your multi-batch .h5ad
+  gene_vocab: human_protein_coding
+  preprocessing:
+    normalize: library_size
+    target_sum: 10000
+    log1p: true
+  max_genes: 2048
+  num_workers: 4
+
+tokenizer:
+  strategy: rank_value                # Geneformer-style rank-value tokenization
+  max_genes: 2048
+  gene_vocab: human_protein_coding
+  prepend_cls: true
+  masking:
+    mask_ratio: 0.15
+    random_replace_ratio: 0.1
+    keep_ratio: 0.1
+
+model:
+  architecture: transformer_encoder
+  hidden_dim: 512
+  num_layers: 6
+  num_heads: 8
+  dropout: 0.1
+  max_seq_len: 2048
+  pooling: cls
+  activation: gelu
+  use_expression_values: true
+  pretraining_task: masked_gene_prediction
+
+training:
+  batch_size: 64                      # Larger batch helps batch integration
+  max_epochs: 15
+  seed: 42
+  precision: bf16-mixed
+  optimizer:
+    name: adamw
+    lr: 5.0e-5                        # Conservative LR for integration
+    weight_decay: 0.01
+  scheduler:
+    name: cosine_warmup
+    warmup_steps: 500
+    total_steps: 10000
+  gradient_clip: 1.0
+  logger: wandb
+  wandb_project: scmodelforge
+  run_name: batch-integration
+  log_every_n_steps: 20
+  checkpoint_dir: ./checkpoints/batch_integration
+  save_top_k: 3
+  num_workers: 4
+  val_split: 0.1
+
+finetune:
+  label_key: batch                    # obs column with batch labels
+  freeze_backbone: true
+  freeze_backbone_epochs: 5           # Gradual unfreezing
+  head:
+    task: classification              # Predict batch -> learn batch-invariant features
+    # n_classes is auto-inferred from unique batch labels
+    hidden_dim: 128
+    dropout: 0.1
+
+eval:
+  every_n_epochs: 3
+  benchmarks:
+    - name: embedding_quality         # Measures batch mixing via ASW_batch
+      dataset: integration_data
+      params:
+        cell_type_key: cell_type      # Biological signal preservation
+        batch_key: batch              # Batch mixing evaluation

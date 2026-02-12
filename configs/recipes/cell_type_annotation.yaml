@@ -1,0 +1,89 @@
+# scModelForge Recipe: Cell Type Annotation (Fine-tuning)
+#
+# Fine-tune a pretrained model to classify cells by type.
+# Uses Geneformer-style rank-value tokenization with LoRA adapters
+# for parameter-efficient transfer learning.
+#
+# Usage:
+#   scmodelforge finetune \
+#     --config configs/recipes/cell_type_annotation.yaml \
+#     --checkpoint path/to/pretrained.ckpt
+#
+# Customize:
+#   1. Set data.paths to your .h5ad file(s)
+#   2. Set finetune.label_key to the obs column with cell type labels
+#   3. Adjust training.max_epochs and training.optimizer.lr as needed
+
+data:
+  source: local
+  paths:
+    - ./data/my_dataset.h5ad          # Replace with your .h5ad file
+  gene_vocab: human_protein_coding
+  preprocessing:
+    normalize: library_size
+    target_sum: 10000
+    log1p: true
+  max_genes: 2048
+  num_workers: 4
+
+tokenizer:
+  strategy: rank_value                # Geneformer-style: rank genes by expression
+  max_genes: 2048
+  gene_vocab: human_protein_coding
+  prepend_cls: true                   # CLS token used for classification pooling
+  masking:
+    # Masking config is required but not applied during fine-tuning
+    mask_ratio: 0.15
+    random_replace_ratio: 0.1
+    keep_ratio: 0.1
+
+model:
+  architecture: transformer_encoder
+  hidden_dim: 512                     # Match pretrained model dimensions
+  num_layers: 6
+  num_heads: 8
+  dropout: 0.1
+  max_seq_len: 2048
+  pooling: cls                        # CLS pooling for classification
+  activation: gelu
+  use_expression_values: true
+  pretraining_task: masked_gene_prediction
+
+training:
+  batch_size: 32                      # Smaller batch for fine-tuning
+  max_epochs: 20
+  seed: 42
+  precision: bf16-mixed
+  optimizer:
+    name: adamw
+    lr: 5.0e-5                        # Lower LR for fine-tuning
+    weight_decay: 0.01
+  scheduler:
+    name: cosine_warmup
+    warmup_steps: 500
+    total_steps: 10000
+  gradient_clip: 1.0
+  logger: wandb
+  wandb_project: scmodelforge
+  run_name: cell-type-annotation
+  log_every_n_steps: 20
+  checkpoint_dir: ./checkpoints/cell_type
+  save_top_k: 3
+  num_workers: 4
+  val_split: 0.1                      # 10% validation for fine-tuning
+
+finetune:
+  label_key: cell_type                # obs column with cell type labels
+  freeze_backbone: true               # Start with frozen backbone
+  freeze_backbone_epochs: 5           # Unfreeze after 5 epochs (gradual unfreezing)
+  head:
+    task: classification
+    # n_classes is auto-inferred from data
+    hidden_dim: 256                   # Hidden layer in classification head
+    dropout: 0.1
+  lora:
+    enabled: true                     # LoRA for parameter-efficient fine-tuning
+    rank: 8
+    alpha: 16
+    dropout: 0.05
+    # target_modules: uses defaults (out_proj, linear1, linear2)

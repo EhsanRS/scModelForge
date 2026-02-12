@@ -10,7 +10,7 @@ Single-cell foundation model pretraining toolkit. Python 3.10+, PyTorch, AnnData
 - **Training**: PyTorch Lightning (`import lightning.pytorch as pl`)
 - **Config**: YAML via OmegaConf, dataclasses in `config/schema.py`
 - **Linting**: ruff (line-length=120, py310 target, TCH rules enabled)
-- **Tests**: pytest, 726+ tests in `tests/`
+- **Tests**: pytest, 756+ tests in `tests/`
 
 ## Key Conventions
 
@@ -43,9 +43,9 @@ Every component type uses the same registry pattern:
 ```
 src/scmodelforge/
   _constants.py          # PAD/UNK/MASK/CLS token IDs
-  cli.py                 # Click CLI (train, finetune, benchmark, export, push, shard)
+  cli.py                 # Click CLI (train, finetune, benchmark, export, push, shard, preprocess)
   config/schema.py       # All @dataclass configs, load_config()
-  data/                  # GeneVocab, CellDataset, CellDataLoader, census, orthologs, perturbation, sharding, sampling, gene_selection, streaming, cloud
+  data/                  # GeneVocab, CellDataset, CellDataLoader, census, orthologs, perturbation, sharding, sampling, gene_selection, streaming, cloud, preprocess
   tokenizers/            # BaseTokenizer, 4 strategies (rank_value, binned, continuous, gene_embedding), masking, registry
   models/                # 3 architectures, components/, registry, hub (save/load/push)
   training/              # Lightning module, data module, pipeline, optimizers, fsdp

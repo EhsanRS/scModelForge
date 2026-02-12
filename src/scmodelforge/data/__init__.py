@@ -14,6 +14,7 @@ from scmodelforge.data.perturbation import (
     PerturbationMetadata,
     parse_perturbation_metadata,
 )
+from scmodelforge.data.preprocess import preprocess_h5ad
 from scmodelforge.data.preprocessing import PreprocessingPipeline
 from scmodelforge.data.sampling import WeightedCellSampler, extract_labels_from_dataset
 from scmodelforge.data.sharding import convert_to_shards
@@ -30,6 +31,7 @@ __all__ = [
     "PerturbationDataset",
     "PerturbationMetadata",
     "PreprocessingPipeline",
+    "preprocess_h5ad",
     "ShardedCellDataset",
     "StreamingCellDataset",
     "WeightedCellSampler",

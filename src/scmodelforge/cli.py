@@ -231,5 +231,46 @@ def shard(config: str, output_dir: str, shard_size: int, gene_vocab: str | None)
     click.echo(f"Shards written to {out}")
 
 
+@main.command()
+@click.option("--config", default=None, type=click.Path(exists=True), help="YAML config (uses data.paths + preprocessing).")
+@click.option("--input", "input_path", default=None, type=str, help="Input .h5ad file (overrides config).")
+@click.option("--output", required=True, type=click.Path(), help="Output preprocessed .h5ad file.")
+@click.option("--hvg", default=None, type=int, help="Select top N highly variable genes.")
+def preprocess(config: str | None, input_path: str | None, output: str, hvg: int | None) -> None:
+    """Preprocess an .h5ad file (normalize, log1p, HVG) and save to disk."""
+    from scmodelforge.data.preprocess import preprocess_h5ad
+
+    if config is not None:
+        from scmodelforge.config import load_config
+
+        cfg = load_config(config)
+        src = input_path or (cfg.data.paths[0] if cfg.data.paths else None)
+        if src is None:
+            raise click.ClickException("No input path: provide --input or set data.paths in config.")
+        normalize = cfg.data.preprocessing.normalize
+        target_sum = cfg.data.preprocessing.target_sum
+        log1p = cfg.data.preprocessing.log1p
+        hvg_n = hvg if hvg is not None else cfg.data.preprocessing.hvg_selection
+    elif input_path is not None:
+        src = input_path
+        normalize = "library_size"
+        target_sum = 1e4
+        log1p = True
+        hvg_n = hvg
+    else:
+        raise click.ClickException("Provide --input or --config.")
+
+    click.echo(f"Preprocessing {src} -> {output}")
+    preprocess_h5ad(
+        input_path=src,
+        output_path=output,
+        normalize=normalize,
+        target_sum=target_sum,
+        log1p=log1p,
+        hvg_n_top_genes=hvg_n,
+    )
+    click.echo("Done.")
+
+
 if __name__ == "__main__":
     main()
