@@ -116,6 +116,25 @@ class PerturbationConfig:
 
 
 @dataclass
+class ShardConfig:
+    """Shard-based data loading configuration.
+
+    Attributes
+    ----------
+    enabled
+        Whether to use memory-mapped shards instead of in-memory data.
+    shard_dir
+        Path to the shard directory (must contain ``manifest.json``).
+    shard_size
+        Max cells per shard when converting with ``scmodelforge shard``.
+    """
+
+    enabled: bool = False
+    shard_dir: str = ""
+    shard_size: int = 500_000
+
+
+@dataclass
 class DataConfig:
     """Configuration for data loading and preprocessing."""
 
@@ -128,6 +147,7 @@ class DataConfig:
     census: CensusConfig = field(default_factory=CensusConfig)
     multi_species: MultiSpeciesConfig = field(default_factory=MultiSpeciesConfig)
     perturbation: PerturbationConfig = field(default_factory=PerturbationConfig)
+    shards: ShardConfig = field(default_factory=ShardConfig)
 
 
 @dataclass

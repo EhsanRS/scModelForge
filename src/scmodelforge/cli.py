@@ -173,5 +173,38 @@ def push(model_dir: str, repo_id: str, private: bool, commit_message: str) -> No
     click.echo(f"Model pushed to {url}")
 
 
+@main.command()
+@click.option("--config", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
+@click.option("--output-dir", required=True, type=click.Path(), help="Output shard directory.")
+@click.option("--shard-size", default=500_000, type=int, help="Max cells per shard.")
+@click.option("--gene-vocab", default=None, type=click.Path(exists=True), help="Gene vocabulary JSON file.")
+def shard(config: str, output_dir: str, shard_size: int, gene_vocab: str | None) -> None:
+    """Convert .h5ad files to memory-mapped shard format."""
+    from scmodelforge.config import load_config
+    from scmodelforge.data.gene_vocab import GeneVocab
+    from scmodelforge.data.sharding import convert_to_shards
+
+    cfg = load_config(config)
+
+    if gene_vocab:
+        vocab = GeneVocab.from_file(gene_vocab)
+    else:
+        # Build vocab from the first data file
+        import anndata as ad
+
+        if not cfg.data.paths:
+            raise click.ClickException("No data paths in config and no --gene-vocab provided")
+        adata = ad.read_h5ad(cfg.data.paths[0])
+        vocab = GeneVocab.from_adata(adata)
+
+    out = convert_to_shards(
+        sources=cfg.data.paths,
+        gene_vocab=vocab,
+        output_dir=output_dir,
+        shard_size=shard_size,
+    )
+    click.echo(f"Shards written to {out}")
+
+
 if __name__ == "__main__":
     main()

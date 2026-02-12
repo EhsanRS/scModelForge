@@ -1,4 +1,4 @@
-"""Tests for CellDataset and AnnDataStore."""
+"""Tests for CellDataset, ShardedCellDataset, and AnnDataStore."""
 
 from __future__ import annotations
 
@@ -6,9 +6,10 @@ import anndata as ad
 import pytest
 import scipy.sparse as sp
 
-from scmodelforge.data.dataset import CellDataset
+from scmodelforge.data.dataset import CellDataset, ShardedCellDataset
 from scmodelforge.data.gene_vocab import GeneVocab
 from scmodelforge.data.preprocessing import PreprocessingPipeline
+from scmodelforge.data.sharding import convert_to_shards
 
 # ------------------------------------------------------------------
 # CellDataset basics
@@ -140,3 +141,49 @@ class TestGeneAlignment:
         ds = CellDataset(adata, gene_vocab=vocab)
         item = ds[0]
         assert item["n_genes"] == 0
+
+
+# ------------------------------------------------------------------
+# ShardedCellDataset
+# ------------------------------------------------------------------
+
+
+class TestShardedCellDataset:
+    def test_getitem_format(self, mini_adata, tmp_path):
+        vocab = GeneVocab.from_adata(mini_adata)
+        output = tmp_path / "shards"
+        convert_to_shards([mini_adata], vocab, output, shard_size=100)
+        ds = ShardedCellDataset(output, gene_vocab=vocab)
+        item = ds[0]
+        assert "expression" in item
+        assert "gene_indices" in item
+        assert "n_genes" in item
+        assert "metadata" in item
+        assert item["expression"].is_floating_point()
+
+    def test_length(self, mini_adata, tmp_path):
+        vocab = GeneVocab.from_adata(mini_adata)
+        output = tmp_path / "shards"
+        convert_to_shards([mini_adata], vocab, output, shard_size=100)
+        ds = ShardedCellDataset(output)
+        assert len(ds) == 100
+
+    def test_works_with_dataloader(self, mini_adata, tmp_path):
+        from scmodelforge.data.dataloader import CellDataLoader
+
+        vocab = GeneVocab.from_adata(mini_adata)
+        output = tmp_path / "shards"
+        convert_to_shards([mini_adata], vocab, output, shard_size=100)
+        ds = ShardedCellDataset(output)
+        loader = CellDataLoader(ds, batch_size=8, shuffle=False, num_workers=0, drop_last=False)
+        batch = next(iter(loader))
+        assert batch["expression"].shape[0] == 8
+
+    def test_repr(self, mini_adata, tmp_path):
+        vocab = GeneVocab.from_adata(mini_adata)
+        output = tmp_path / "shards"
+        convert_to_shards([mini_adata], vocab, output, shard_size=50)
+        ds = ShardedCellDataset(output)
+        r = repr(ds)
+        assert "ShardedCellDataset" in r
+        assert "n_shards=2" in r
