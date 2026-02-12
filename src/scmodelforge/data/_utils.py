@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import scipy.sparse as sp
 import torch
+
+if TYPE_CHECKING:
+    import anndata as ad
+
+    from scmodelforge.config.schema import DataConfig
+
+logger = logging.getLogger(__name__)
 
 
 def sparse_to_dense(x: sp.spmatrix | np.ndarray) -> np.ndarray:
@@ -127,3 +135,55 @@ def collate_cells(batch: list[dict[str, Any]], pad_value: int = 0) -> dict[str, 
         "n_genes": torch.tensor(n_genes_list, dtype=torch.long),
         "metadata": metadata_list,
     }
+
+
+def load_adata(
+    data_config: DataConfig,
+    adata: Any | None = None,
+    obs_keys: list[str] | None = None,
+) -> ad.AnnData:
+    """Load AnnData from the configured source.
+
+    Dispatches on ``data_config.source``:
+
+    * ``"local"`` — reads ``.h5ad`` files from ``data_config.paths``
+    * ``"cellxgene_census"`` — queries CELLxGENE Census via
+      :func:`~scmodelforge.data.census.load_census_adata`
+
+    Parameters
+    ----------
+    data_config
+        Data configuration (source, paths, census settings, etc.).
+    adata
+        Optional pre-loaded AnnData.  If provided, returned directly
+        (useful for testing / programmatic use).
+    obs_keys
+        Extra ``obs`` column names forwarded to Census loading.
+
+    Returns
+    -------
+    anndata.AnnData
+
+    Raises
+    ------
+    ValueError
+        If *source* is not recognized.
+    """
+    if adata is not None:
+        return adata
+
+    if data_config.source == "cellxgene_census":
+        from scmodelforge.data.census import load_census_adata
+
+        return load_census_adata(data_config.census, obs_keys=obs_keys)
+
+    if data_config.source == "local":
+        import anndata as ad
+
+        adata_list = [ad.read_h5ad(p) for p in data_config.paths]
+        if len(adata_list) == 1:
+            return adata_list[0]
+        return ad.concat(adata_list)
+
+    msg = f"Unknown data source: {data_config.source!r}. Expected 'local' or 'cellxgene_census'."
+    raise ValueError(msg)

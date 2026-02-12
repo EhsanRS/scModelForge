@@ -1,5 +1,6 @@
 """Data loading and preprocessing for single-cell datasets."""
 
+from scmodelforge.data.census import build_obs_value_filter, load_census_adata
 from scmodelforge.data.dataloader import CellDataLoader
 from scmodelforge.data.dataset import CellDataset
 from scmodelforge.data.gene_vocab import GeneVocab
@@ -10,4 +11,6 @@ __all__ = [
     "CellDataset",
     "GeneVocab",
     "PreprocessingPipeline",
+    "build_obs_value_filter",
+    "load_census_adata",
 ]

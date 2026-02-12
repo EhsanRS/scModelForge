@@ -35,11 +35,13 @@ dependencies = [
 [project.optional-dependencies]
 census = ["cellxgene-census>=1.0"]
 eval = ["scib>=1.1", "pertpy>=0.6"]
+peft = ["peft>=0.6"]
 wandb = ["wandb>=0.15"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-xdist>=3.0",
+    "peft>=0.6",
     "ruff>=0.4",
     "mypy>=1.5",
     "pre-commit>=3.0",
@@ -50,8 +52,9 @@ docs = [
     "sphinx-autodoc2>=0.5",
     "sphinx-book-theme>=1.0",
     "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.5",
 ]
-all = ["scModelForge[census,eval,wandb,dev,docs]"]
+all = ["scModelForge[census,eval,peft,wandb,dev,docs]"]
 
 [project.scripts]
 scmodelforge = "scmodelforge.cli:main"

@@ -17,9 +17,17 @@ class TestRegistration:
     def test_rank_value_registered(self):
         assert "rank_value" in _REGISTRY
 
+    def test_binned_expression_registered(self):
+        assert "binned_expression" in _REGISTRY
+
+    def test_continuous_projection_registered(self):
+        assert "continuous_projection" in _REGISTRY
+
     def test_list_tokenizers(self):
         names = list_tokenizers()
         assert "rank_value" in names
+        assert "binned_expression" in names
+        assert "continuous_projection" in names
         assert names == sorted(names)
 
     def test_get_tokenizer(self, small_vocab):

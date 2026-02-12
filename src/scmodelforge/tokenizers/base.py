@@ -32,6 +32,10 @@ class TokenizedCell:
         Binary mask, ``1`` for real tokens, ``0`` for padding.
     values
         Continuous expression values (optional — not every strategy uses them).
+    bin_ids
+        Discrete bin indices (optional — only ``BinnedExpressionTokenizer``
+        populates this).  1-D long tensor ``(seq_len,)`` with values in
+        ``[0, n_bins - 1]``.
     gene_indices
         Original gene vocabulary indices for each position.
     metadata
@@ -41,6 +45,7 @@ class TokenizedCell:
     input_ids: torch.Tensor
     attention_mask: torch.Tensor
     values: torch.Tensor | None = None
+    bin_ids: torch.Tensor | None = None
     gene_indices: torch.Tensor = field(default_factory=lambda: torch.tensor([], dtype=torch.long))
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -172,11 +177,13 @@ class BaseTokenizer(ABC):
 
         batch_max = max(c.input_ids.shape[0] for c in cells)
         has_values = cells[0].values is not None
+        has_bin_ids = cells[0].bin_ids is not None
         is_masked = isinstance(cells[0], MaskedTokenizedCell)
 
         input_ids_batch = []
         mask_batch = []
         values_batch = []
+        bin_ids_batch = []
         gene_idx_batch = []
         labels_batch = []
         masked_pos_batch = []
@@ -192,6 +199,9 @@ class BaseTokenizer(ABC):
             if has_values:
                 values_batch.append(_pad_1d(c.values, pad_len, 0.0))  # type: ignore[arg-type]
 
+            if has_bin_ids:
+                bin_ids_batch.append(_pad_1d(c.bin_ids, pad_len, PAD_TOKEN_ID))  # type: ignore[arg-type]
+
             if is_masked:
                 mc = c  # type: ignore[assignment]
                 labels_batch.append(_pad_1d(mc.labels, pad_len, -100))
@@ -204,6 +214,8 @@ class BaseTokenizer(ABC):
         }
         if has_values:
             result["values"] = torch.stack(values_batch)
+        if has_bin_ids:
+            result["bin_ids"] = torch.stack(bin_ids_batch)
         if is_masked:
             result["labels"] = torch.stack(labels_batch)
             result["masked_positions"] = torch.stack(masked_pos_batch)

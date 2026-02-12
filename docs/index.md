@@ -22,26 +22,44 @@ Get scModelForge up and running.
 
 Train your first model in minutes.
 :::
+
+:::{grid-item-card} Architecture
+:link: architecture
+:link-type: doc
+
+Understand the toolkit's design.
+:::
+
+:::{grid-item-card} CLI Reference
+:link: cli
+:link-type: doc
+
+Command-line interface documentation.
+:::
 ::::
 
-## Modules
+## Documentation
 
 ```{toctree}
 :maxdepth: 2
 :caption: User Guide
 
 getting_started
+architecture
+cli
 ```
 
 ```{toctree}
 :maxdepth: 2
 :caption: API Reference
 
+api/config
 api/data
 api/tokenizers
 api/models
 api/training
 api/eval
+api/finetuning
 ```
 
 ```{toctree}
@@ -49,4 +67,11 @@ api/eval
 :caption: Development
 
 changelog
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Full Reference
+
+apidocs/index
 ```

@@ -86,6 +86,7 @@ class MaskingStrategy:
         input_ids = cell.input_ids.clone()
         attention_mask = cell.attention_mask.clone()
         values = cell.values.clone() if cell.values is not None else None
+        bin_ids = cell.bin_ids.clone() if cell.bin_ids is not None else None
         gene_indices = cell.gene_indices.clone()
 
         seq_len = input_ids.shape[0]
@@ -104,6 +105,7 @@ class MaskingStrategy:
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 values=values,
+                bin_ids=bin_ids,
                 gene_indices=gene_indices,
                 metadata=dict(cell.metadata),
                 labels=labels,
@@ -140,6 +142,7 @@ class MaskingStrategy:
             input_ids=input_ids,
             attention_mask=attention_mask,
             values=values,
+            bin_ids=bin_ids,
             gene_indices=gene_indices,
             metadata=dict(cell.metadata),
             labels=labels,

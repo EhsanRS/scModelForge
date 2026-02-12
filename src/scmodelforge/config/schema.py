@@ -32,6 +32,36 @@ class PreprocessingConfig:
 
 
 @dataclass
+class CensusConfig:
+    """CELLxGENE Census data source configuration.
+
+    Attributes
+    ----------
+    organism
+        Census organism name (e.g. ``"Homo sapiens"``, ``"Mus musculus"``).
+    census_version
+        Census release version or ``"latest"``.
+    obs_value_filter
+        Raw SOMA ``obs_value_filter`` string. Takes precedence over
+        *filters* if both are set.
+    var_value_filter
+        Raw SOMA ``var_value_filter`` string for gene filtering.
+    filters
+        Structured filter dict auto-converted to a SOMA filter string.
+        Example: ``{"tissue": ["brain", "lung"], "is_primary_data": True}``.
+    obs_columns
+        Additional ``obs`` metadata columns to include in the AnnData.
+    """
+
+    organism: str = "Homo sapiens"
+    census_version: str = "latest"
+    obs_value_filter: str | None = None
+    var_value_filter: str | None = None
+    filters: dict[str, Any] | None = None
+    obs_columns: list[str] | None = None
+
+
+@dataclass
 class DataConfig:
     """Configuration for data loading and preprocessing."""
 
@@ -41,6 +71,7 @@ class DataConfig:
     preprocessing: PreprocessingConfig = field(default_factory=PreprocessingConfig)
     max_genes: int = 2048
     num_workers: int = 4
+    census: CensusConfig = field(default_factory=CensusConfig)
 
 
 @dataclass
@@ -60,6 +91,8 @@ class TokenizerConfig:
     max_genes: int = 2048
     gene_vocab: str = "human_protein_coding"
     prepend_cls: bool = True
+    n_bins: int = 51
+    binning_method: str = "uniform"
     masking: MaskingConfig = field(default_factory=MaskingConfig)
 
 
@@ -80,6 +113,14 @@ class ModelConfig:
     pretraining_task: str = "masked_gene_prediction"
     mask_ratio: float = 0.15
     vocab_size: int | None = None  # Inferred from gene vocab at runtime
+    # Autoregressive model options
+    n_bins: int = 51
+    gene_loss_weight: float = 1.0
+    expression_loss_weight: float = 1.0
+    # Masked autoencoder decoder options
+    decoder_dim: int | None = None  # Defaults to hidden_dim // 2
+    decoder_layers: int = 4
+    decoder_heads: int | None = None  # Defaults to num_heads
 
 
 @dataclass
@@ -131,7 +172,99 @@ class EvalConfig:
     """Configuration for evaluation benchmarks."""
 
     every_n_epochs: int = 2
+    batch_size: int = 256
     benchmarks: list[Any] = field(default_factory=list)
+
+
+@dataclass
+class TaskHeadConfig:
+    """Configuration for a fine-tuning task head.
+
+    Attributes
+    ----------
+    task
+        Task type: ``"classification"`` or ``"regression"``.
+    n_classes
+        Number of output classes (classification only). Inferred from data
+        if ``None``.
+    output_dim
+        Output dimension for regression tasks.
+    hidden_dim
+        Optional hidden layer dimension. ``None`` means a direct projection.
+    dropout
+        Dropout probability in the head.
+    """
+
+    task: str = "classification"
+    n_classes: int | None = None
+    output_dim: int = 1
+    hidden_dim: int | None = None
+    dropout: float = 0.1
+
+
+@dataclass
+class LoRAConfig:
+    """LoRA adapter configuration.
+
+    Attributes
+    ----------
+    enabled
+        Whether to apply LoRA adapters.
+    rank
+        LoRA rank (r). Typical: 4, 8, 16.
+    alpha
+        LoRA scaling factor (alpha). Usually alpha = rank or 2*rank.
+    dropout
+        Dropout applied to LoRA layers.
+    target_modules
+        Module name patterns to apply LoRA to. ``None`` uses defaults
+        (out_proj, linear1, linear2).
+    bias
+        Bias handling: ``"none"``, ``"all"``, or ``"lora_only"``.
+    """
+
+    enabled: bool = False
+    rank: int = 8
+    alpha: int = 16
+    dropout: float = 0.05
+    target_modules: list[str] | None = None
+    bias: str = "none"
+
+
+@dataclass
+class FinetuneConfig:
+    """Configuration for fine-tuning a pretrained backbone.
+
+    Attributes
+    ----------
+    checkpoint_path
+        Path to the pretrained model checkpoint.
+    freeze_backbone
+        If ``True``, freeze all backbone parameters throughout training.
+    freeze_backbone_epochs
+        Unfreeze backbone after this many epochs (0 = no schedule).
+    label_key
+        Column in ``adata.obs`` containing task labels.
+    head
+        Task head configuration.
+    backbone_lr
+        Discriminative learning rate for the backbone. ``None`` uses the
+        global optimizer LR.
+    head_lr
+        Discriminative learning rate for the head. ``None`` uses the
+        global optimizer LR.
+    lora
+        LoRA adapter configuration.
+    """
+
+    checkpoint_path: str = ""
+    freeze_backbone: bool = False
+    freeze_backbone_epochs: int = 0
+    label_key: str = "cell_type"
+    head: TaskHeadConfig = field(default_factory=TaskHeadConfig)
+    backbone_lr: float | None = None
+    head_lr: float | None = None
+    lora: LoRAConfig = field(default_factory=LoRAConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +281,7 @@ class ScModelForgeConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
+    finetune: FinetuneConfig | None = None
 
 
 def load_config(path: str | Path) -> ScModelForgeConfig:
