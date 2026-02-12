@@ -45,7 +45,7 @@ src/scmodelforge/
   _constants.py          # PAD/UNK/MASK/CLS token IDs
   cli.py                 # Click CLI (train, finetune, benchmark, export, push, shard)
   config/schema.py       # All @dataclass configs, load_config()
-  data/                  # GeneVocab, CellDataset, CellDataLoader, census, orthologs, perturbation, sharding, sampling, gene_selection, streaming
+  data/                  # GeneVocab, CellDataset, CellDataLoader, census, orthologs, perturbation, sharding, sampling, gene_selection, streaming, cloud
   tokenizers/            # BaseTokenizer, 4 strategies (rank_value, binned, continuous, gene_embedding), masking, registry
   models/                # 3 architectures, components/, registry, hub (save/load/push)
   training/              # Lightning module, data module, pipeline, optimizers, fsdp
