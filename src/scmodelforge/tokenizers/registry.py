@@ -9,6 +9,18 @@ if TYPE_CHECKING:
 
 _REGISTRY: dict[str, type[BaseTokenizer]] = {}
 
+_state = {"plugins_loaded": False}
+
+
+def _ensure_plugins() -> None:
+    """Discover third-party tokenizer plugins on first access."""
+    if _state["plugins_loaded"]:
+        return
+    _state["plugins_loaded"] = True
+    from scmodelforge._plugins import TOKENIZER_GROUP, discover_plugins
+
+    discover_plugins(TOKENIZER_GROUP, _REGISTRY)
+
 
 def register_tokenizer(name: str):
     """Class decorator that registers a tokenizer under *name*.
@@ -43,6 +55,7 @@ def get_tokenizer(name: str, **kwargs: Any) -> BaseTokenizer:
     ValueError
         If *name* is not in the registry.
     """
+    _ensure_plugins()
     if name not in _REGISTRY:
         available = ", ".join(sorted(_REGISTRY)) or "(none)"
         raise ValueError(f"Unknown tokenizer '{name}'. Available: {available}")
@@ -51,4 +64,5 @@ def get_tokenizer(name: str, **kwargs: Any) -> BaseTokenizer:
 
 def list_tokenizers() -> list[str]:
     """Return sorted list of registered tokenizer names."""
+    _ensure_plugins()
     return sorted(_REGISTRY)

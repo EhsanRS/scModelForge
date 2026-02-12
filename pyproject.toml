@@ -67,6 +67,17 @@ all = ["scModelForge[census,perturbation,eval,cz-benchmarks,cloud,hub,peft,wandb
 [project.scripts]
 scmodelforge = "scmodelforge.cli:main"
 
+# Third-party plugins register components via these entry-point groups.
+# Example in a plugin's pyproject.toml:
+#   [project.entry-points."scmodelforge.tokenizers"]
+#   my_tokenizer = "my_package.module:MyTokenizerClass"
+#
+#   [project.entry-points."scmodelforge.models"]
+#   my_model = "my_package.module:MyModelClass"
+#
+#   [project.entry-points."scmodelforge.benchmarks"]
+#   my_benchmark = "my_package.module:MyBenchmarkClass"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -10,7 +10,7 @@ Single-cell foundation model pretraining toolkit. Python 3.10+, PyTorch, AnnData
 - **Training**: PyTorch Lightning (`import lightning.pytorch as pl`)
 - **Config**: YAML via OmegaConf, dataclasses in `config/schema.py`
 - **Linting**: ruff (line-length=120, py310 target, TCH rules enabled)
-- **Tests**: pytest, 776+ tests in `tests/`
+- **Tests**: pytest, 790+ tests in `tests/`
 
 ## Key Conventions
 
@@ -43,6 +43,7 @@ Every component type uses the same registry pattern:
 ```
 src/scmodelforge/
   _constants.py          # PAD/UNK/MASK/CLS token IDs
+  _plugins.py            # Third-party plugin discovery via entry points
   cli.py                 # Click CLI (train, finetune, benchmark, export, push, shard, preprocess)
   config/schema.py       # All @dataclass configs, load_config()
   data/                  # GeneVocab, CellDataset, CellDataLoader, census, orthologs, perturbation, sharding, sampling, gene_selection, streaming, cloud, preprocess
@@ -75,6 +76,15 @@ See `prompts/` for detailed implementation guides:
 6. Run `ruff check` and `pytest`
 7. Update API docs in `docs/api/`
 8. **Commit and push** — after every feature, fix, or meaningful addition, create a commit and push to the remote
+
+### Plugin system (third-party components)
+
+Third-party packages can register tokenizers, models, and benchmarks via Python entry points — no need to modify scModelForge source. Entry-point groups:
+- `scmodelforge.tokenizers` — tokenizer classes
+- `scmodelforge.models` — model classes
+- `scmodelforge.benchmarks` — benchmark classes
+
+Plugin discovery is **lazy**: entry points are scanned once on the first call to `get_*()` or `list_*()`. Built-in components (registered via decorators) always take precedence over plugins with the same name. The shared discovery logic lives in `_plugins.py`; each registry has a `_state`/`_ensure_plugins()` pair.
 
 ## Workflow
 

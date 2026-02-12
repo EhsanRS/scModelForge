@@ -11,6 +11,18 @@ if TYPE_CHECKING:
 
 _MODEL_REGISTRY: dict[str, type[nn.Module]] = {}
 
+_state = {"plugins_loaded": False}
+
+
+def _ensure_plugins() -> None:
+    """Discover third-party model plugins on first access."""
+    if _state["plugins_loaded"]:
+        return
+    _state["plugins_loaded"] = True
+    from scmodelforge._plugins import MODEL_GROUP, discover_plugins
+
+    discover_plugins(MODEL_GROUP, _MODEL_REGISTRY)
+
 
 def register_model(name: str):
     """Class decorator that registers a model under *name*.
@@ -45,6 +57,7 @@ def get_model(name: str, config: ModelConfig) -> nn.Module:
     ValueError
         If *name* is not in the registry.
     """
+    _ensure_plugins()
     if name not in _MODEL_REGISTRY:
         available = ", ".join(sorted(_MODEL_REGISTRY)) or "(none)"
         raise ValueError(f"Unknown model '{name}'. Available: {available}")
@@ -54,4 +67,5 @@ def get_model(name: str, config: ModelConfig) -> nn.Module:
 
 def list_models() -> list[str]:
     """Return sorted list of registered model names."""
+    _ensure_plugins()
     return sorted(_MODEL_REGISTRY)
