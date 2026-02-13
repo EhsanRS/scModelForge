@@ -76,12 +76,10 @@ class DistributedShardSampler(Sampler[int]):
         rng = np.random.default_rng(self._seed + self._epoch)
 
         # Assign shards to this rank
-        n_shards = self._store.n_shards
-        shard_order = list(range(n_shards))
+        shard_order = list(range(self._store.n_shards))
         if self._shuffle:
             rng.shuffle(shard_order)
 
-        # Each rank gets every num_replicas-th shard
         my_shards = shard_order[self._rank :: self._num_replicas]
 
         # Collect cell indices from assigned shards
@@ -93,25 +91,46 @@ class DistributedShardSampler(Sampler[int]):
                 rng.shuffle(shard_indices)
             indices.extend(shard_indices)
 
-        # Drop last if needed
-        if self._drop_last:
-            # Make divisible by num_replicas
-            per_rank = len(self) if self._drop_last else len(indices)
-            indices = indices[:per_rank]
+        # Truncate to globally consistent count so all ranks have equal length
+        if self._drop_last and self._num_replicas > 1:
+            target = self._min_per_rank_count(shard_order)
+            indices = indices[:target]
 
         return iter(indices)
 
     def __len__(self) -> int:
-        # Total cells assigned to this rank
-        n_shards = self._store.n_shards
-        shard_order = list(range(n_shards))
+        shard_order = self._epoch_shard_order()
         my_shards = shard_order[self._rank :: self._num_replicas]
-
         total = sum(
             self._shard_ranges[s][1] - self._shard_ranges[s][0]
             for s in my_shards
         )
+        if self._drop_last and self._num_replicas > 1:
+            return self._min_per_rank_count(shard_order)
         return total
+
+    def _epoch_shard_order(self) -> list[int]:
+        """Deterministic shard order for the current epoch."""
+        rng = np.random.default_rng(self._seed + self._epoch)
+        shard_order = list(range(self._store.n_shards))
+        if self._shuffle:
+            rng.shuffle(shard_order)
+        return shard_order
+
+    def _min_per_rank_count(self, shard_order: list[int]) -> int:
+        """Minimum per-rank cell count across all ranks.
+
+        Each rank can independently compute this (same deterministic
+        shard order) and truncate to the same target, ensuring equal
+        step counts across DDP/FSDP processes.
+        """
+        return min(
+            sum(
+                self._shard_ranges[s][1] - self._shard_ranges[s][0]
+                for s in shard_order[r :: self._num_replicas]
+            )
+            for r in range(self._num_replicas)
+        )
 
     def set_epoch(self, epoch: int) -> None:
         """Set the epoch for deterministic shuffling.
