@@ -29,21 +29,32 @@ def train(config: str, resume: str | None) -> None:
 
 @main.command()
 @click.option("--config", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
-@click.option("--model", required=True, type=click.Path(exists=True), help="Model checkpoint path.")
+@click.option("--model", default=None, type=click.Path(exists=True), help="Model checkpoint path.")
 @click.option("--data", required=True, type=str, help="Assessment .h5ad file (local path or cloud URL).")
 @click.option("--output", default=None, type=click.Path(), help="Save results as JSON.")
-def benchmark(config: str, model: str, data: str, output: str | None) -> None:
-    """Run evaluation benchmarks on a trained model."""
+@click.option("--external-model", default=None, type=str, help="External model name (e.g. 'geneformer').")
+@click.option("--external-source", default=None, type=str, help="Model path or HF repo (e.g. 'ctheodoris/Geneformer').")
+@click.option("--device", default="cpu", type=str, help="Device for inference (e.g. 'cpu', 'cuda').")
+@click.option("--isolated", is_flag=True, default=False, help="Run external model in isolated subprocess environment.")
+@click.option("--env-dir", default=None, type=click.Path(), help="Environment directory for isolated mode.")
+def benchmark(
+    config: str,
+    model: str | None,
+    data: str,
+    output: str | None,
+    external_model: str | None,
+    external_source: str | None,
+    device: str,
+    isolated: bool,
+    env_dir: str | None,
+) -> None:
+    """Run benchmarks on a trained model (native or external)."""
     import json
 
     import anndata as ad
-    import torch
 
     from scmodelforge.config import load_config
-    from scmodelforge.data.gene_vocab import GeneVocab
     from scmodelforge.eval.harness import EvalHarness
-    from scmodelforge.models.registry import get_model
-    from scmodelforge.tokenizers.registry import get_tokenizer
 
     cfg = load_config(config)
 
@@ -62,36 +73,64 @@ def benchmark(config: str, model: str, data: str, output: str | None) -> None:
         adata = ad.read_h5ad(data)
     click.echo(f"Loaded {adata.n_obs} cells from {data}")
 
-    # Build vocab and tokenizer
-    vocab = GeneVocab.from_adata(adata)
-    tok_cfg = cfg.tokenizer
-    from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
-
-    tokenizer = get_tokenizer(tok_cfg.strategy, **build_tokenizer_kwargs(tok_cfg, vocab))
-
-    # Build model from config
-    cfg.model.vocab_size = len(vocab)
-    nn_model = get_model(cfg.model.architecture, cfg.model)
-
-    # Load weights from checkpoint
-    checkpoint = torch.load(model, map_location="cpu", weights_only=True)
-    state_dict = checkpoint.get("state_dict", checkpoint)
-    # Strip "model." prefix if saved from LightningModule
-    cleaned = {}
-    for k, v in state_dict.items():
-        key = k.removeprefix("model.")
-        cleaned[key] = v
-    nn_model.load_state_dict(cleaned)
-    click.echo("Model weights loaded.")
-
-    # Build harness and run
+    # Build harness
     harness = EvalHarness.from_config(cfg.eval)
-    results = harness.run(
-        nn_model,
-        {"data": adata},
-        tokenizer,
-        batch_size=cfg.eval.batch_size,
-    )
+
+    if external_model:
+        if isolated:
+            # Isolated subprocess mode
+            from scmodelforge.zoo.isolation import IsolatedAdapter
+
+            adapter_kwargs: dict[str, str] = {"device": device}
+            if external_source:
+                adapter_kwargs["model_name_or_path"] = external_source
+            adapter = IsolatedAdapter(
+                external_model,
+                env_dir=env_dir,
+                **adapter_kwargs,
+            )
+        else:
+            # Direct in-process mode
+            from scmodelforge.zoo.registry import get_external_model
+
+            adapter_kwargs = {"device": device}
+            if external_source:
+                adapter_kwargs["model_name_or_path"] = external_source
+            adapter = get_external_model(external_model, **adapter_kwargs)
+        click.echo(f"Using external model: {adapter.info.full_name or adapter.info.name}")
+
+        results = harness.run_external(adapter, {"data": adata}, device=device)
+    else:
+        # Native model path (original behaviour)
+        if model is None:
+            raise click.ClickException("--model is required when not using --external-model")
+
+        import torch
+
+        from scmodelforge.data.gene_vocab import GeneVocab
+        from scmodelforge.models.registry import get_model
+        from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
+        from scmodelforge.tokenizers.registry import get_tokenizer
+
+        vocab = GeneVocab.from_adata(adata)
+        tok_cfg = cfg.tokenizer
+        tokenizer = get_tokenizer(tok_cfg.strategy, **build_tokenizer_kwargs(tok_cfg, vocab))
+
+        cfg.model.vocab_size = len(vocab)
+        nn_model = get_model(cfg.model.architecture, cfg.model)
+
+        checkpoint = torch.load(model, map_location="cpu", weights_only=True)
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        cleaned = {k.removeprefix("model."): v for k, v in state_dict.items()}
+        nn_model.load_state_dict(cleaned)
+        click.echo("Model weights loaded.")
+
+        results = harness.run(
+            nn_model,
+            {"data": adata},
+            tokenizer,
+            batch_size=cfg.eval.batch_size,
+        )
 
     # Print results
     for r in results:
@@ -267,6 +306,61 @@ def preprocess(config: str | None, input_path: str | None, output: str, hvg: int
         hvg_n_top_genes=hvg_n,
     )
     click.echo("Done.")
+
+
+@main.group()
+def zoo() -> None:
+    """Manage isolated environments for external pretrained models."""
+
+
+@zoo.command(name="install")
+@click.argument("model_name")
+@click.option("--env-dir", default=None, type=click.Path(), help="Base directory for environments.")
+@click.option("--python", "python_version", default=None, type=str, help="Python version (e.g. '3.10').")
+@click.option("--extra-deps", multiple=True, help="Additional pip packages to install.")
+def zoo_install(model_name: str, env_dir: str | None, python_version: str | None, extra_deps: tuple[str, ...]) -> None:
+    """Install an isolated environment for MODEL_NAME."""
+    from scmodelforge.zoo.isolation import install_env
+
+    click.echo(f"Installing isolated environment for '{model_name}'...")
+    install_env(
+        model_name,
+        env_dir=env_dir,
+        python_version=python_version,
+        extra_deps=list(extra_deps) if extra_deps else None,
+    )
+    click.echo(f"Environment for '{model_name}' installed successfully.")
+
+
+@zoo.command(name="list")
+@click.option("--env-dir", default=None, type=click.Path(), help="Base directory for environments.")
+def zoo_list(env_dir: str | None) -> None:
+    """List installed isolated model environments."""
+    from scmodelforge.zoo._env_registry import list_installed_envs
+
+    envs = list_installed_envs(base_dir=env_dir)
+    if not envs:
+        click.echo("No isolated environments installed.")
+        return
+    for info in envs:
+        status_icon = "+" if info.status == "installed" else "!"
+        click.echo(f"  [{status_icon}] {info.model_name}  ({info.status})  {info.env_path}")
+
+
+@zoo.command(name="remove")
+@click.argument("model_name")
+@click.option("--env-dir", default=None, type=click.Path(), help="Base directory for environments.")
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+def zoo_remove(model_name: str, env_dir: str | None, yes: bool) -> None:
+    """Remove an isolated environment for MODEL_NAME."""
+    from scmodelforge.zoo._env_registry import remove_env
+
+    if not yes:
+        click.confirm(f"Remove isolated environment for '{model_name}'?", abort=True)
+    if remove_env(model_name, base_dir=env_dir):
+        click.echo(f"Removed environment for '{model_name}'.")
+    else:
+        click.echo(f"No environment found for '{model_name}'.")
 
 
 if __name__ == "__main__":
