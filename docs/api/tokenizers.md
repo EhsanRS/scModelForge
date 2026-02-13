@@ -34,6 +34,7 @@ Tokenization output is structured as `TokenizedCell` or `MaskedTokenizedCell` da
 | `rank_genes_by_expression()` | Rank genes by descending expression |
 | `compute_bin_edges()` | Compute bin edges for expression discretization |
 | `digitize_expression()` | Map continuous values to discrete bins |
+| `build_tokenizer_kwargs()` | Build `get_tokenizer()` kwargs from a `TokenizerConfig` |
 
 ---
 
@@ -639,7 +640,7 @@ from scmodelforge.data import GeneVocab
 from scmodelforge.tokenizers import get_tokenizer, list_tokenizers
 
 # List available tokenizers
-print(list_tokenizers())  # ['binned_expression', 'continuous_projection', 'rank_value']
+print(list_tokenizers())  # ['binned_expression', 'continuous_projection', 'gene_embedding', 'rank_value']
 
 # Build vocab
 vocab = GeneVocab.from_genes(["GeneA", "GeneB", "GeneC"])
@@ -809,6 +810,58 @@ edges = compute_bin_edges(n_bins=5, method="uniform", value_max=10.0)
 values = torch.tensor([0.0, 2.0, 5.5, 9.0, 0.0])
 bin_ids = digitize_expression(values, edges)
 print(bin_ids)  # tensor([0, 1, 2, 4, 0]) — bin assignments
+```
+
+---
+
+#### `build_tokenizer_kwargs()`
+
+Build keyword arguments for `get_tokenizer()` from a `TokenizerConfig`. Maps strategy-specific config fields (e.g., `n_bins`, `embedding_path`) to the corresponding constructor parameters so that user configuration is faithfully propagated.
+
+This helper is used internally by `CellDataModule`, `FineTuneDataModule`, and the CLI to ensure all `TokenizerConfig` fields reach the tokenizer constructor.
+
+```python
+from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
+```
+
+##### Function Signature
+
+```python
+build_tokenizer_kwargs(
+    tok_cfg: TokenizerConfig,
+    gene_vocab: GeneVocab
+) -> dict
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `tok_cfg` | `TokenizerConfig` | *required* | Tokenizer configuration from the config system |
+| `gene_vocab` | `GeneVocab` | *required* | Gene vocabulary instance |
+
+**Returns:** `dict` — Keyword arguments to pass to `get_tokenizer(tok_cfg.strategy, **kwargs)`.
+
+**Mapped fields by strategy:**
+
+| Strategy | Base fields (always) | Strategy-specific fields |
+|----------|---------------------|------------------------|
+| `rank_value` | `gene_vocab`, `max_len`, `prepend_cls` | — |
+| `binned_expression` | `gene_vocab`, `max_len`, `prepend_cls` | `n_bins`, `binning_method` |
+| `continuous_projection` | `gene_vocab`, `max_len`, `prepend_cls` | — |
+| `gene_embedding` | `gene_vocab`, `max_len`, `prepend_cls` | `embedding_path`, `embedding_dim` |
+
+#### Example
+
+```python
+from scmodelforge.config import load_config
+from scmodelforge.data import GeneVocab
+from scmodelforge.tokenizers import get_tokenizer, build_tokenizer_kwargs
+
+config = load_config("configs/my_config.yaml")
+vocab = GeneVocab.from_genes(["GeneA", "GeneB", "GeneC"])
+
+# Build kwargs from config and pass to registry
+tok_cfg = config.tokenizer
+tokenizer = get_tokenizer(tok_cfg.strategy, **build_tokenizer_kwargs(tok_cfg, vocab))
 ```
 
 ---

@@ -4,6 +4,11 @@
 
 Initial release of scModelForge, a complete toolkit for pretraining and fine-tuning single-cell foundation models.
 
+### Bug Fixes
+
+- Fix dependency: use `lightning` package instead of `pytorch-lightning` (the codebase imports `lightning.pytorch`)
+- Fix tokenizer config propagation: strategy-specific `TokenizerConfig` fields (`n_bins`, `binning_method`, `embedding_path`, `embedding_dim`) are now passed to tokenizer constructors in training, fine-tuning, and CLI benchmark paths via new `build_tokenizer_kwargs()` helper
+
 ### Stage 0: Scaffolding
 
 - Project structure with src-layout and six core modules: `data`, `tokenizers`, `models`, `training`, `eval`, `finetuning`

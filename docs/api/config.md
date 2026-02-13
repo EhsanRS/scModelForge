@@ -173,27 +173,50 @@ Configuration for tokenization strategy.
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `strategy` | `str` | `"rank_value"` | Tokenizer type: `"rank_value"`, `"binned_expression"`, `"continuous_projection"` |
+| `strategy` | `str` | `"rank_value"` | Tokenizer type: `"rank_value"`, `"binned_expression"`, `"continuous_projection"`, `"gene_embedding"` |
 | `max_genes` | `int` | `2048` | Maximum sequence length (genes per cell) |
 | `gene_vocab` | `str` | `"human_protein_coding"` | Gene vocabulary name |
 | `prepend_cls` | `bool` | `True` | Whether to prepend a `[CLS]` token |
-| `n_bins` | `int` | `51` | Number of expression bins (for `binned_expression` tokenizer) |
-| `binning_method` | `str` | `"uniform"` | Binning method: `"uniform"` or `"quantile"` |
+| `n_bins` | `int` | `51` | Number of expression bins (for `binned_expression` strategy) |
+| `binning_method` | `str` | `"uniform"` | Binning method: `"uniform"` or `"quantile"` (for `binned_expression` strategy) |
+| `embedding_path` | `str \| None` | `None` | Path to pretrained gene embedding file (for `gene_embedding` strategy) |
+| `embedding_dim` | `int` | `200` | Expected embedding dimension (for `gene_embedding` strategy) |
 | `masking` | `MaskingConfig` | `MaskingConfig()` | Masking strategy configuration |
+
+All strategy-specific fields (`n_bins`, `binning_method`, `embedding_path`, `embedding_dim`) are automatically propagated to the tokenizer constructor via `build_tokenizer_kwargs()` when using the training pipeline, fine-tuning pipeline, or CLI.
 
 #### Example
 
 ```yaml
+# Rank-value tokenizer (Geneformer-style)
 tokenizer:
   strategy: rank_value
   max_genes: 2048
   prepend_cls: true
-  n_bins: 51
-  binning_method: uniform
   masking:
     mask_ratio: 0.15
     random_replace_ratio: 0.1
     keep_ratio: 0.1
+```
+
+```yaml
+# Binned expression tokenizer (scGPT-style)
+tokenizer:
+  strategy: binned_expression
+  max_genes: 2048
+  n_bins: 51
+  binning_method: uniform
+  prepend_cls: true
+```
+
+```yaml
+# Gene embedding tokenizer
+tokenizer:
+  strategy: gene_embedding
+  max_genes: 2048
+  embedding_path: ./pretrained/gene2vec.npy
+  embedding_dim: 200
+  prepend_cls: true
 ```
 
 ---
@@ -555,8 +578,12 @@ tokenizer:
   max_genes: 2048
   gene_vocab: human_protein_coding
   prepend_cls: true
+  # Binned expression options (only used if strategy: binned_expression)
   n_bins: 51
   binning_method: uniform
+  # Gene embedding options (only used if strategy: gene_embedding)
+  embedding_path: null
+  embedding_dim: 200
   masking:
     mask_ratio: 0.15
     random_replace_ratio: 0.1
