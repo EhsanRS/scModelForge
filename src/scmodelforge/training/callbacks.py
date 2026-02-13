@@ -74,6 +74,30 @@ class TrainingMetricsLogger(pl.Callback):
         pl_module.log("perf/epoch_time_sec", epoch_time, sync_dist=False)
 
 
+class SamplerEpochCallback(pl.Callback):
+    """Advance epoch-aware samplers at the start of each training epoch.
+
+    Calls ``set_epoch(current_epoch)`` on the sampler so that
+    :class:`~scmodelforge.data.sampling.WeightedCellSampler` curriculum
+    interpolation (and :class:`~scmodelforge.data.distributed.DistributedShardSampler`
+    shard rotation) work correctly.
+
+    Parameters
+    ----------
+    sampler
+        Any sampler that exposes a ``set_epoch(int)`` method.
+    """
+
+    def __init__(self, sampler: object) -> None:
+        super().__init__()
+        self._sampler = sampler
+
+    def on_train_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule,
+    ) -> None:
+        self._sampler.set_epoch(trainer.current_epoch)  # type: ignore[union-attr]
+
+
 class GradientNormLogger(pl.Callback):
     """Log gradient L2 norm before the optimizer step.
 

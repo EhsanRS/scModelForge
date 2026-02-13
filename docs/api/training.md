@@ -24,6 +24,7 @@ All configuration is expressed declaratively in YAML and loaded via `ScModelForg
 | `build_scheduler` | Factory for cosine warmup, cosine, and linear LR schedulers |
 | `TrainingMetricsLogger` | Callback logging cells/sec, step time, epoch time |
 | `GradientNormLogger` | Callback logging gradient L2 norms before optimizer step |
+| `SamplerEpochCallback` | Callback advancing epoch-aware samplers (curriculum learning, shard rotation) |
 | `get_environment_info` | Collect runtime environment details (Python, CUDA, platform) |
 | `log_training_config` | Log key training config values at INFO level |
 
@@ -633,6 +634,32 @@ callback = GradientNormLogger(log_every_n_steps=100)
 trainer = pl.Trainer(max_epochs=10, callbacks=[callback])
 trainer.fit(model, train_loader, val_loader)
 ```
+
+---
+
+### `SamplerEpochCallback`
+
+Lightning callback that advances epoch-aware samplers at the start of each training epoch. Ensures `WeightedCellSampler` curriculum interpolation and `DistributedShardSampler` shard rotation work correctly.
+
+```python
+from scmodelforge.training import SamplerEpochCallback
+
+callback = SamplerEpochCallback(sampler)
+```
+
+#### Constructor
+
+```python
+SamplerEpochCallback(sampler: object)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `sampler` | `object` | *required* | Any sampler with a `set_epoch(int)` method |
+
+**Behavior:**
+- Calls `sampler.set_epoch(trainer.current_epoch)` in `on_train_epoch_start`
+- Automatically wired by `TrainingPipeline` when weighted sampling is configured
 
 ---
 

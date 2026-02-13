@@ -12,6 +12,7 @@ Initial release of scModelForge, a complete toolkit for pretraining and fine-tun
 - Fix perturbation recipe: corrected parameter names (`control_key` → `control_label`, `n_top_degs` → `n_top_genes`) to match `PerturbationBenchmark` constructor
 - Wire `AssessmentCallback` into `TrainingPipeline`: `eval.benchmarks` config now activates in-training evaluation via `_build_callbacks(data_module)`, with `CellDataModule.adata` property providing the validation AnnData
 - Fix gradual unfreezing: backbone parameters are now always included in optimizer groups (even when frozen), so `freeze_backbone_epochs` correctly enables training of backbone params after unfreezing instead of silently leaving them out of the optimizer
+- Fix weighted sampling curriculum: add `SamplerEpochCallback` that calls `sampler.set_epoch()` each epoch, so `curriculum_warmup_epochs` actually progresses instead of staying at epoch 0 behavior
 
 ### Stage 0: Scaffolding
 

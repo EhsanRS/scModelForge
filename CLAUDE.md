@@ -10,7 +10,7 @@ Single-cell foundation model pretraining toolkit. Python 3.10+, PyTorch, AnnData
 - **Training**: PyTorch Lightning (`import lightning.pytorch as pl`)
 - **Config**: YAML via OmegaConf, dataclasses in `config/schema.py`
 - **Linting**: ruff (line-length=120, py310 target, TCH rules enabled)
-- **Tests**: pytest, 799+ tests in `tests/`
+- **Tests**: pytest, 804+ tests in `tests/`
 
 ## Key Conventions
 

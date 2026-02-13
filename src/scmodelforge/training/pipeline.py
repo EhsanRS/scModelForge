@@ -118,7 +118,11 @@ class TrainingPipeline:
         """Build the list of Lightning callbacks."""
         import lightning.pytorch as pl
 
-        from scmodelforge.training.callbacks import GradientNormLogger, TrainingMetricsLogger
+        from scmodelforge.training.callbacks import (
+            GradientNormLogger,
+            SamplerEpochCallback,
+            TrainingMetricsLogger,
+        )
 
         cfg = self.config.training
         callbacks: list[pl.Callback] = []
@@ -141,6 +145,10 @@ class TrainingPipeline:
         # Custom callbacks
         callbacks.append(TrainingMetricsLogger(log_every_n_steps=cfg.log_every_n_steps))
         callbacks.append(GradientNormLogger(log_every_n_steps=cfg.log_every_n_steps))
+
+        # Sampler epoch advancement (curriculum learning, distributed shard rotation)
+        if data_module is not None and hasattr(data_module, '_sampler') and data_module._sampler is not None:
+            callbacks.append(SamplerEpochCallback(data_module._sampler))
 
         # Assessment callback for in-training evaluation
         eval_cfg = self.config.eval

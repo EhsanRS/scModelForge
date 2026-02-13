@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import torch
 
-from scmodelforge.training.callbacks import GradientNormLogger, TrainingMetricsLogger
+from scmodelforge.training.callbacks import GradientNormLogger, SamplerEpochCallback, TrainingMetricsLogger
 
 
 class TestTrainingMetricsLogger:
@@ -119,3 +119,41 @@ class TestGradientNormLogger:
         cb.on_before_optimizer_step(trainer, pl_module, optimizer)
         logged_value = pl_module.log.call_args[0][1]
         assert logged_value >= 0.0
+
+
+class TestSamplerEpochCallback:
+    """Tests for SamplerEpochCallback."""
+
+    def test_calls_set_epoch(self) -> None:
+        sampler = MagicMock()
+        cb = SamplerEpochCallback(sampler)
+        trainer = MagicMock()
+        trainer.current_epoch = 3
+        pl_module = MagicMock()
+        cb.on_train_epoch_start(trainer, pl_module)
+        sampler.set_epoch.assert_called_once_with(3)
+
+    def test_advances_each_epoch(self) -> None:
+        sampler = MagicMock()
+        cb = SamplerEpochCallback(sampler)
+        pl_module = MagicMock()
+        for epoch in range(5):
+            trainer = MagicMock()
+            trainer.current_epoch = epoch
+            cb.on_train_epoch_start(trainer, pl_module)
+        assert sampler.set_epoch.call_count == 5
+        sampler.set_epoch.assert_called_with(4)
+
+    def test_works_with_weighted_cell_sampler(self) -> None:
+        from scmodelforge.data.sampling import WeightedCellSampler
+
+        sampler = WeightedCellSampler(
+            labels=["a", "a", "b", "b", "c"],
+            curriculum_warmup_epochs=5,
+        )
+        cb = SamplerEpochCallback(sampler)
+        trainer = MagicMock()
+        trainer.current_epoch = 3
+        pl_module = MagicMock()
+        cb.on_train_epoch_start(trainer, pl_module)
+        assert sampler._epoch == 3

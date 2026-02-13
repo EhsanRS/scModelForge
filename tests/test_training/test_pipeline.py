@@ -206,6 +206,48 @@ class TestAssessmentCallbackWiring:
         assert dm.adata.shape[0] == tiny_adata.shape[0]
 
 
+class TestSamplerEpochCallbackWiring:
+    """Tests for SamplerEpochCallback wiring in _build_callbacks."""
+
+    def test_no_sampler_callback_without_sampler(self, tiny_full_config: ScModelForgeConfig) -> None:
+        """No SamplerEpochCallback when sampler is absent."""
+        from scmodelforge.training.callbacks import SamplerEpochCallback
+
+        pipeline = TrainingPipeline(tiny_full_config)
+        callbacks = pipeline._build_callbacks()
+        assert not any(isinstance(c, SamplerEpochCallback) for c in callbacks)
+
+    def test_sampler_callback_attached_when_weighted(
+        self,
+        tiny_adata: AnnData,
+        tiny_full_config: ScModelForgeConfig,
+    ) -> None:
+        """SamplerEpochCallback is attached when weighted sampling is configured."""
+        from scmodelforge.config.schema import SamplingConfig
+        from scmodelforge.training.callbacks import SamplerEpochCallback
+
+        tiny_full_config.training.sampling = SamplingConfig(
+            strategy="weighted",
+            label_key="cell_type",
+            curriculum_warmup_epochs=3,
+        )
+        pipeline = TrainingPipeline(tiny_full_config)
+        dm = CellDataModule(
+            data_config=tiny_full_config.data,
+            tokenizer_config=tiny_full_config.tokenizer,
+            training_batch_size=4,
+            num_workers=0,
+            val_split=0.2,
+            adata=tiny_adata,
+            sampling_config=tiny_full_config.training.sampling,
+        )
+        dm.setup()
+
+        callbacks = pipeline._build_callbacks(data_module=dm)
+        sampler_cbs = [c for c in callbacks if isinstance(c, SamplerEpochCallback)]
+        assert len(sampler_cbs) == 1
+
+
 class TestImportPipeline:
     """Verify that the public API import works."""
 
