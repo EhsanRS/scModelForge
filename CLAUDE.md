@@ -10,7 +10,7 @@ Single-cell foundation model pretraining toolkit. Python 3.10+, PyTorch, AnnData
 - **Training**: PyTorch Lightning (`import lightning.pytorch as pl`)
 - **Config**: YAML via OmegaConf, dataclasses in `config/schema.py`
 - **Linting**: ruff (line-length=120, py310 target, TCH rules enabled)
-- **Tests**: pytest, 804+ tests in `tests/`
+- **Tests**: pytest, 820+ tests in `tests/`
 
 ## Key Conventions
 
@@ -75,7 +75,7 @@ See `prompts/` for detailed implementation guides:
 5. Write tests following existing patterns in `tests/`
 6. Run `ruff check` and `pytest`
 7. Update API docs in `docs/api/`
-8. **Commit and push** — after every feature, fix, or meaningful addition, create a commit and push to the remote
+8. **Commit and push** — after every feature, fix, or meaningful addition, commit and push to the feature branch
 
 ### Plugin system (third-party components)
 
@@ -88,7 +88,9 @@ Plugin discovery is **lazy**: entry points are scanned once on the first call to
 
 ## Workflow
 
-- **Always commit and push** after completing a feature, bug fix, or any meaningful addition. Do not let work accumulate uncommitted. Each logical unit of work should be a separate commit pushed to the remote.
+- **Branch-based development**: Create a feature branch for each new stage, feature, or bug-fix batch. Branch naming: `feature/<short-description>` (e.g. `feature/stage-6-mixed-precision`). Commit frequently to the branch, then open a PR to merge into `main` when the work is complete.
+- **Always commit and push** after completing a feature, bug fix, or any meaningful addition. Do not let work accumulate uncommitted. Each logical unit of work should be a separate commit pushed to the feature branch.
+- **Pull requests**: When the feature branch is ready, create a PR with a summary of changes and a test plan. Do not push directly to `main`.
 - **Update CLAUDE.md** after implementing stages, phases, or new features. Keep the file structure, test count, CLI commands, and other documentation current so it accurately reflects the codebase.
 
 ## Important Notes
