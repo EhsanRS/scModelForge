@@ -237,12 +237,9 @@ class FineTuneDataModule:
 
         # 5. Build tokenizer (no masking)
         tok_cfg = self._tokenizer_config
-        self._tokenizer = get_tokenizer(
-            tok_cfg.strategy,
-            gene_vocab=self._gene_vocab,
-            max_len=tok_cfg.max_genes,
-            prepend_cls=tok_cfg.prepend_cls,
-        )
+        from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
+
+        self._tokenizer = get_tokenizer(tok_cfg.strategy, **build_tokenizer_kwargs(tok_cfg, self._gene_vocab))
 
         # 6. Build labels
         raw_labels = list(adata.obs[label_key])

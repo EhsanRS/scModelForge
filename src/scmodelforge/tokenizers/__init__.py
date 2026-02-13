@@ -1,5 +1,6 @@
 """Tokenization strategies for single-cell gene expression data."""
 
+from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
 from scmodelforge.tokenizers.base import BaseTokenizer, MaskedTokenizedCell, TokenizedCell
 from scmodelforge.tokenizers.binned_expression import BinnedExpressionTokenizer
 from scmodelforge.tokenizers.continuous_projection import ContinuousProjectionTokenizer
@@ -17,6 +18,7 @@ __all__ = [
     "MaskingStrategy",
     "RankValueTokenizer",
     "TokenizedCell",
+    "build_tokenizer_kwargs",
     "get_tokenizer",
     "list_tokenizers",
     "register_tokenizer",

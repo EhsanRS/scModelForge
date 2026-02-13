@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 if TYPE_CHECKING:
+    from scmodelforge.config.schema import TokenizerConfig
     from scmodelforge.data.gene_vocab import GeneVocab
 
 logger = logging.getLogger(__name__)
@@ -216,3 +217,36 @@ def load_gene_embeddings(path: str, gene_vocab: GeneVocab) -> torch.Tensor:
         embedding_dim,
     )
     return aligned
+
+
+def build_tokenizer_kwargs(tok_cfg: TokenizerConfig, gene_vocab: GeneVocab) -> dict:
+    """Build keyword arguments for :func:`get_tokenizer` from a config.
+
+    Maps strategy-specific :class:`TokenizerConfig` fields to the
+    corresponding constructor parameters so that user configuration
+    is faithfully propagated.
+
+    Parameters
+    ----------
+    tok_cfg
+        Tokenizer configuration.
+    gene_vocab
+        Gene vocabulary instance.
+
+    Returns
+    -------
+    dict
+        Keyword arguments to pass to ``get_tokenizer(tok_cfg.strategy, **kwargs)``.
+    """
+    kwargs: dict = {
+        "gene_vocab": gene_vocab,
+        "max_len": tok_cfg.max_genes,
+        "prepend_cls": tok_cfg.prepend_cls,
+    }
+    if tok_cfg.strategy == "binned_expression":
+        kwargs["n_bins"] = tok_cfg.n_bins
+        kwargs["binning_method"] = tok_cfg.binning_method
+    elif tok_cfg.strategy == "gene_embedding":
+        kwargs["embedding_path"] = tok_cfg.embedding_path
+        kwargs["embedding_dim"] = tok_cfg.embedding_dim
+    return kwargs

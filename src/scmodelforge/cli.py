@@ -65,12 +65,9 @@ def benchmark(config: str, model: str, data: str, output: str | None) -> None:
     # Build vocab and tokenizer
     vocab = GeneVocab.from_adata(adata)
     tok_cfg = cfg.tokenizer
-    tokenizer = get_tokenizer(
-        tok_cfg.strategy,
-        gene_vocab=vocab,
-        max_len=tok_cfg.max_genes,
-        prepend_cls=tok_cfg.prepend_cls,
-    )
+    from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
+
+    tokenizer = get_tokenizer(tok_cfg.strategy, **build_tokenizer_kwargs(tok_cfg, vocab))
 
     # Build model from config
     cfg.model.vocab_size = len(vocab)
