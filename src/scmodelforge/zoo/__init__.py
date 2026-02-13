@@ -8,13 +8,16 @@ import scmodelforge.zoo.scprint  # noqa: F401
 import scmodelforge.zoo.stack  # noqa: F401
 import scmodelforge.zoo.uce  # noqa: F401
 from scmodelforge.zoo.base import BaseModelAdapter, ExternalModelInfo, GeneOverlapReport
+from scmodelforge.zoo.isolation import IsolatedAdapter, install_env
 from scmodelforge.zoo.registry import get_external_model, list_external_models, register_external_model
 
 __all__ = [
     "BaseModelAdapter",
     "ExternalModelInfo",
     "GeneOverlapReport",
+    "IsolatedAdapter",
     "get_external_model",
+    "install_env",
     "list_external_models",
     "register_external_model",
 ]

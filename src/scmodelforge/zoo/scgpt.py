@@ -81,6 +81,11 @@ class ScGPTAdapter(BaseModelAdapter):
             supports_finetune=False,
         )
 
+    @classmethod
+    def isolation_deps(cls) -> list[str]:
+        """Pip requirements for isolated environment."""
+        return ["scgpt>=0.2", "torch>=2.0"]
+
     def _require_package(self) -> None:
         from scmodelforge.zoo._utils import require_package
 

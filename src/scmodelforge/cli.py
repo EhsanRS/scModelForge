@@ -35,6 +35,8 @@ def train(config: str, resume: str | None) -> None:
 @click.option("--external-model", default=None, type=str, help="External model name (e.g. 'geneformer').")
 @click.option("--external-source", default=None, type=str, help="Model path or HF repo (e.g. 'ctheodoris/Geneformer').")
 @click.option("--device", default="cpu", type=str, help="Device for inference (e.g. 'cpu', 'cuda').")
+@click.option("--isolated", is_flag=True, default=False, help="Run external model in isolated subprocess environment.")
+@click.option("--env-dir", default=None, type=click.Path(), help="Environment directory for isolated mode.")
 def benchmark(
     config: str,
     model: str | None,
@@ -43,6 +45,8 @@ def benchmark(
     external_model: str | None,
     external_source: str | None,
     device: str,
+    isolated: bool,
+    env_dir: str | None,
 ) -> None:
     """Run benchmarks on a trained model (native or external)."""
     import json
@@ -73,13 +77,26 @@ def benchmark(
     harness = EvalHarness.from_config(cfg.eval)
 
     if external_model:
-        # External model path — use zoo adapter
-        from scmodelforge.zoo.registry import get_external_model
+        if isolated:
+            # Isolated subprocess mode
+            from scmodelforge.zoo.isolation import IsolatedAdapter
 
-        kwargs: dict[str, str] = {"device": device}
-        if external_source:
-            kwargs["model_name_or_path"] = external_source
-        adapter = get_external_model(external_model, **kwargs)
+            adapter_kwargs: dict[str, str] = {"device": device}
+            if external_source:
+                adapter_kwargs["model_name_or_path"] = external_source
+            adapter = IsolatedAdapter(
+                external_model,
+                env_dir=env_dir,
+                **adapter_kwargs,
+            )
+        else:
+            # Direct in-process mode
+            from scmodelforge.zoo.registry import get_external_model
+
+            adapter_kwargs = {"device": device}
+            if external_source:
+                adapter_kwargs["model_name_or_path"] = external_source
+            adapter = get_external_model(external_model, **adapter_kwargs)
         click.echo(f"Using external model: {adapter.info.full_name or adapter.info.name}")
 
         results = harness.run_external(adapter, {"data": adata}, device=device)
@@ -289,6 +306,61 @@ def preprocess(config: str | None, input_path: str | None, output: str, hvg: int
         hvg_n_top_genes=hvg_n,
     )
     click.echo("Done.")
+
+
+@main.group()
+def zoo() -> None:
+    """Manage isolated environments for external pretrained models."""
+
+
+@zoo.command(name="install")
+@click.argument("model_name")
+@click.option("--env-dir", default=None, type=click.Path(), help="Base directory for environments.")
+@click.option("--python", "python_version", default=None, type=str, help="Python version (e.g. '3.10').")
+@click.option("--extra-deps", multiple=True, help="Additional pip packages to install.")
+def zoo_install(model_name: str, env_dir: str | None, python_version: str | None, extra_deps: tuple[str, ...]) -> None:
+    """Install an isolated environment for MODEL_NAME."""
+    from scmodelforge.zoo.isolation import install_env
+
+    click.echo(f"Installing isolated environment for '{model_name}'...")
+    install_env(
+        model_name,
+        env_dir=env_dir,
+        python_version=python_version,
+        extra_deps=list(extra_deps) if extra_deps else None,
+    )
+    click.echo(f"Environment for '{model_name}' installed successfully.")
+
+
+@zoo.command(name="list")
+@click.option("--env-dir", default=None, type=click.Path(), help="Base directory for environments.")
+def zoo_list(env_dir: str | None) -> None:
+    """List installed isolated model environments."""
+    from scmodelforge.zoo._env_registry import list_installed_envs
+
+    envs = list_installed_envs(base_dir=env_dir)
+    if not envs:
+        click.echo("No isolated environments installed.")
+        return
+    for info in envs:
+        status_icon = "+" if info.status == "installed" else "!"
+        click.echo(f"  [{status_icon}] {info.model_name}  ({info.status})  {info.env_path}")
+
+
+@zoo.command(name="remove")
+@click.argument("model_name")
+@click.option("--env-dir", default=None, type=click.Path(), help="Base directory for environments.")
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+def zoo_remove(model_name: str, env_dir: str | None, yes: bool) -> None:
+    """Remove an isolated environment for MODEL_NAME."""
+    from scmodelforge.zoo._env_registry import remove_env
+
+    if not yes:
+        click.confirm(f"Remove isolated environment for '{model_name}'?", abort=True)
+    if remove_env(model_name, base_dir=env_dir):
+        click.echo(f"Removed environment for '{model_name}'.")
+    else:
+        click.echo(f"No environment found for '{model_name}'.")
 
 
 if __name__ == "__main__":

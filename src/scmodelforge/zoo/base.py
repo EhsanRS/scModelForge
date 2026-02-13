@@ -195,6 +195,16 @@ class BaseModelAdapter(ABC):
             f"Check adapter.info.supports_finetune before calling."
         )
 
+    @classmethod
+    def isolation_deps(cls) -> list[str]:
+        """Return pip requirements for an isolated environment.
+
+        Override in subclasses to specify the full set of pip packages
+        needed when running this adapter in a subprocess-isolated virtualenv.
+        Default returns an empty list (falls back to ``info.pip_package``).
+        """
+        return []
+
     def _ensure_loaded(self) -> None:
         """Ensure the model is loaded, calling ``_require_package()`` and ``load_model()`` once."""
         if not self._loaded:

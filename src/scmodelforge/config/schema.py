@@ -440,6 +440,31 @@ class FinetuneConfig:
 
 
 # ---------------------------------------------------------------------------
+# Zoo config
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ZooConfig:
+    """Configuration for the model zoo isolation system.
+
+    Attributes
+    ----------
+    env_dir
+        Base directory for isolated virtualenvs.
+    python_version
+        Python version for new environments (e.g. ``"3.10"``).
+        If ``None``, uses the current interpreter version.
+    timeout
+        Subprocess timeout in seconds. 0 means no timeout.
+    """
+
+    env_dir: str = "~/.cache/scmodelforge/envs"
+    python_version: str | None = None
+    timeout: int = 0
+
+
+# ---------------------------------------------------------------------------
 # Top-level config
 # ---------------------------------------------------------------------------
 
@@ -454,6 +479,7 @@ class ScModelForgeConfig:
     training: TrainingConfig = field(default_factory=TrainingConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
     finetune: FinetuneConfig | None = None
+    zoo: ZooConfig = field(default_factory=ZooConfig)
 
 
 def save_config(config: ScModelForgeConfig, path: str | Path) -> None:
