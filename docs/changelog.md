@@ -8,6 +8,8 @@ Initial release of scModelForge, a complete toolkit for pretraining and fine-tun
 
 - Fix dependency: use `lightning` package instead of `pytorch-lightning` (the codebase imports `lightning.pytorch`)
 - Fix tokenizer config propagation: strategy-specific `TokenizerConfig` fields (`n_bins`, `binning_method`, `embedding_path`, `embedding_dim`) are now passed to tokenizer constructors in training, fine-tuning, and CLI benchmark paths via new `build_tokenizer_kwargs()` helper
+- Fix eval benchmark parser: `EvalHarness.from_config()` now supports the nested `{name, dataset, params}` spec format used in shipped configs, strips informational `dataset` key, and unpacks `params` as constructor kwargs
+- Fix perturbation recipe: corrected parameter names (`control_key` → `control_label`, `n_top_degs` → `n_top_genes`) to match `PerturbationBenchmark` constructor
 
 ### Stage 0: Scaffolding
 

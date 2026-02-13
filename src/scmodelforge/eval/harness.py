@@ -60,7 +60,12 @@ class EvalHarness:
             elif isinstance(spec, dict):
                 spec = dict(spec)  # copy to avoid mutating original
                 name = spec.pop("name")
-                benchmarks.append(get_benchmark(name, **spec))
+                # "dataset" is routing metadata, not a constructor kwarg
+                spec.pop("dataset", None)
+                # Support nested {params: {...}} and flat kwargs
+                params = spec.pop("params", {})
+                kwargs = {**spec, **params}
+                benchmarks.append(get_benchmark(name, **kwargs))
             else:
                 msg = f"Invalid benchmark spec: {spec!r}. Expected str or dict."
                 raise ValueError(msg)

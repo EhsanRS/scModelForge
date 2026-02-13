@@ -99,6 +99,40 @@ class TestEvalHarness:
         assert len(harness.benchmarks) == 1
         assert harness.benchmarks[0]._seed == 123
 
+    def test_from_config_with_nested_params(self):
+        """Nested {name, dataset, params} format used in shipped configs."""
+        config = EvalConfig(benchmarks=[{
+            "name": "linear_probe",
+            "dataset": "tabula_sapiens",
+            "params": {"cell_type_key": "cell_type", "test_size": 0.3},
+        }])
+        harness = EvalHarness.from_config(config)
+        assert len(harness.benchmarks) == 1
+        assert harness.benchmarks[0]._cell_type_key == "cell_type"
+        assert harness.benchmarks[0]._test_size == 0.3
+
+    def test_from_config_dataset_key_stripped(self):
+        """The 'dataset' key is metadata, not a constructor kwarg."""
+        config = EvalConfig(benchmarks=[{
+            "name": "linear_probe",
+            "dataset": "some_dataset",
+        }])
+        # Should not raise TypeError about unexpected 'dataset' kwarg
+        harness = EvalHarness.from_config(config)
+        assert len(harness.benchmarks) == 1
+
+    def test_from_config_flat_and_nested_merged(self):
+        """Flat kwargs alongside nested params are merged (params wins)."""
+        config = EvalConfig(benchmarks=[{
+            "name": "linear_probe",
+            "seed": 99,
+            "params": {"test_size": 0.4},
+        }])
+        harness = EvalHarness.from_config(config)
+        bench = harness.benchmarks[0]
+        assert bench._seed == 99
+        assert bench._test_size == 0.4
+
     def test_from_config_invalid_spec_raises(self):
         config = EvalConfig(benchmarks=[42])
         with pytest.raises(ValueError, match="Invalid benchmark spec"):

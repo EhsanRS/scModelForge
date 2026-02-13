@@ -94,5 +94,5 @@ eval:
       dataset: perturbation_data
       params:
         perturbation_key: perturbation
-        control_key: control
-        n_top_degs: 50
+        control_label: control
+        n_top_genes: 50

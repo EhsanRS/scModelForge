@@ -434,7 +434,10 @@ Create an `EvalHarness` from an `EvalConfig`. Instantiates benchmarks from the r
 
 Benchmark specifications can be:
 - **String:** `"linear_probe"` (uses default parameters)
-- **Dict:** `{"name": "linear_probe", "test_size": 0.3}` (with custom parameters)
+- **Flat dict:** `{"name": "linear_probe", "test_size": 0.3}` (kwargs alongside name)
+- **Nested dict:** `{"name": "linear_probe", "dataset": "pbmc", "params": {"test_size": 0.3}}` (shipped config format)
+
+The `dataset` key is informational metadata and is stripped before constructing the benchmark. When `params` is present, its contents are unpacked as constructor kwargs. Flat kwargs and nested `params` can be mixed; `params` values take precedence.
 
 **Returns:** `EvalHarness` instance.
 
@@ -479,12 +482,21 @@ benchmarks = [
 ]
 harness = EvalHarness(benchmarks)
 
-# Or from config
+# Or from config (flat dict format)
 from scmodelforge.config import EvalConfig
 config = EvalConfig(
     benchmarks=[
         "linear_probe",
         {"name": "embedding_quality", "batch_key": "batch"}
+    ]
+)
+harness = EvalHarness.from_config(config)
+
+# Nested format (matches shipped YAML configs)
+config = EvalConfig(
+    benchmarks=[
+        {"name": "linear_probe", "dataset": "pbmc", "params": {"test_size": 0.3}},
+        {"name": "embedding_quality", "dataset": "pbmc", "params": {"batch_key": "batch"}},
     ]
 )
 harness = EvalHarness.from_config(config)
