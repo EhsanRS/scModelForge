@@ -321,6 +321,8 @@ Build optimizer with discriminative LRs for backbone and head.
 - Head decay
 - Head no-decay
 
+**Note:** Backbone parameters are always included in the optimizer, even when frozen. This ensures gradual unfreezing works correctly — when `requires_grad` is later set to `True`, the optimizer already has the parameters registered. PyTorch optimizers safely skip parameters with no `.grad` (i.e. frozen params), so this has no cost while frozen.
+
 **Returns:**
 - `dict` — With keys `optimizer` and optionally `lr_scheduler`
 

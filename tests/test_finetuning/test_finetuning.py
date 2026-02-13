@@ -479,6 +479,32 @@ class TestFineTuneLightningModule:
         assert loss.ndim == 0
         assert torch.isfinite(loss)
 
+    def test_frozen_backbone_params_in_optimizer(self, tiny_backbone):
+        """Backbone params must be in optimizer even when frozen, for gradual unfreezing."""
+        head = ClassificationHead(input_dim=32, n_classes=3)
+        ft_model = FineTuneModel(tiny_backbone, head, task="classification", freeze_backbone=True)
+        module = FineTuneLightningModule(
+            model=ft_model,
+            optimizer_config=OptimizerConfig(name="adamw", lr=1e-3),
+            task="classification",
+            freeze_backbone_epochs=2,
+        )
+        opt_config = module.configure_optimizers()
+        optimizer = opt_config["optimizer"]
+
+        # Collect all param ids in optimizer
+        opt_param_ids = set()
+        for group in optimizer.param_groups:
+            for p in group["params"]:
+                opt_param_ids.add(id(p))
+
+        # Every backbone param should be in the optimizer (even though frozen)
+        for name, param in ft_model.backbone.named_parameters():
+            assert id(param) in opt_param_ids, (
+                f"Frozen backbone param {name!r} not in optimizer — "
+                "gradual unfreezing would silently fail"
+            )
+
 
 # =========================================================================
 # Checkpoint loading

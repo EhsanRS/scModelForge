@@ -114,7 +114,11 @@ class FineTuneLightningModule(pl.LightningModule):
         backbone_lr = self._backbone_lr if self._backbone_lr is not None else cfg.lr
         head_lr = self._head_lr if self._head_lr is not None else cfg.lr
 
-        # Separate backbone and head parameters with weight decay grouping
+        # Separate backbone and head parameters with weight decay grouping.
+        # Backbone params are ALWAYS included (even when frozen) so that
+        # gradual unfreezing works correctly — the optimizer already has the
+        # params when requires_grad is later set to True.  PyTorch optimizers
+        # safely skip params with no .grad attribute (i.e. frozen params).
         backbone_decay = []
         backbone_no_decay = []
         head_decay = []
@@ -123,8 +127,6 @@ class FineTuneLightningModule(pl.LightningModule):
         no_decay_keywords = ("bias", "layer_norm", "LayerNorm", "layernorm")
 
         for name, param in self.model.backbone.named_parameters():
-            if not param.requires_grad:
-                continue
             if any(kw in name for kw in no_decay_keywords):
                 backbone_no_decay.append(param)
             else:
