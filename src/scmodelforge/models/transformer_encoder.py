@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 
 from scmodelforge.models._utils import count_parameters, init_weights
+from scmodelforge.models.components.attention import build_encoder, build_encoder_layer
 from scmodelforge.models.components.embeddings import GeneExpressionEmbedding
 from scmodelforge.models.components.heads import MaskedGenePredictionHead
 from scmodelforge.models.components.pooling import cls_pool, mean_pool
@@ -46,6 +47,13 @@ class TransformerEncoder(nn.Module):
         Whether to use expression value projection in embeddings.
     layer_norm_eps
         Epsilon for LayerNorm layers.
+    attention_type
+        Attention mechanism: ``"standard"``, ``"flash"``, ``"gene_bias"``,
+        or ``"linear"``.
+    max_genes
+        Max gene vocab size for gene_bias attention.
+    gene_bias_init_std
+        Std for gene-gene bias initialisation.
     """
 
     def __init__(
@@ -62,11 +70,15 @@ class TransformerEncoder(nn.Module):
         *,
         use_expression_values: bool = True,
         layer_norm_eps: float = 1e-12,
+        attention_type: str = "standard",
+        max_genes: int = 30000,
+        gene_bias_init_std: float = 0.02,
     ) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.hidden_dim = hidden_dim
         self._pooling_strategy = pooling
+        self._attention_type = attention_type
 
         if ffn_dim is None:
             ffn_dim = 4 * hidden_dim
@@ -80,18 +92,20 @@ class TransformerEncoder(nn.Module):
             layer_norm_eps=layer_norm_eps,
         )
 
-        encoder_layer = nn.TransformerEncoderLayer(
+        encoder_layer = build_encoder_layer(
+            attention_type=attention_type,
             d_model=hidden_dim,
             nhead=num_heads,
             dim_feedforward=ffn_dim,
             dropout=dropout,
             activation=activation,
-            batch_first=True,
-            norm_first=True,
             layer_norm_eps=layer_norm_eps,
+            max_genes=max_genes,
+            gene_bias_init_std=gene_bias_init_std,
         )
-        self.encoder = nn.TransformerEncoder(
-            encoder_layer,
+        self.encoder = build_encoder(
+            attention_type=attention_type,
+            encoder_layer=encoder_layer,
             num_layers=num_layers,
         )
 
@@ -133,7 +147,12 @@ class TransformerEncoder(nn.Module):
 
         # nn.TransformerEncoder expects src_key_padding_mask where True = ignore
         padding_mask = attention_mask == 0
-        hidden = self.encoder(emb, src_key_padding_mask=padding_mask)
+
+        encoder_kwargs = {}
+        if self._attention_type == "gene_bias":
+            encoder_kwargs["gene_indices"] = input_ids
+
+        hidden = self.encoder(emb, src_key_padding_mask=padding_mask, **encoder_kwargs)
 
         # Pooling for cell embeddings
         embeddings = self._pool(hidden, attention_mask)
@@ -174,7 +193,12 @@ class TransformerEncoder(nn.Module):
         """
         emb = self.embedding(input_ids, values=values)
         padding_mask = attention_mask == 0
-        hidden = self.encoder(emb, src_key_padding_mask=padding_mask)
+
+        encoder_kwargs = {}
+        if self._attention_type == "gene_bias":
+            encoder_kwargs["gene_indices"] = input_ids
+
+        hidden = self.encoder(emb, src_key_padding_mask=padding_mask, **encoder_kwargs)
         return self._pool(hidden, attention_mask)
 
     def _pool(self, hidden: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
@@ -213,6 +237,9 @@ class TransformerEncoder(nn.Module):
             pooling=config.pooling,
             activation=config.activation,
             use_expression_values=config.use_expression_values,
+            attention_type=config.attention.type,
+            max_genes=config.attention.max_genes,
+            gene_bias_init_std=config.attention.gene_bias_init_std,
         )
 
     def num_parameters(self, *, trainable_only: bool = True) -> int:

@@ -76,12 +76,13 @@ class TestBuildFsdpStrategy:
     def test_activation_checkpointing_on(self, mock_cls):
         from torch import nn
 
+        from scmodelforge.models.components.encoder_layer import ScModelForgeEncoderLayer
         from scmodelforge.training.fsdp import build_fsdp_strategy
 
         mock_cls.return_value = MagicMock()
         build_fsdp_strategy(FSDPConfig(activation_checkpointing=True))
         _, kwargs = mock_cls.call_args
-        assert kwargs["activation_checkpointing_policy"] == {nn.TransformerEncoderLayer}
+        assert kwargs["activation_checkpointing_policy"] == {nn.TransformerEncoderLayer, ScModelForgeEncoderLayer}
 
     @patch("lightning.pytorch.strategies.FSDPStrategy")
     def test_activation_checkpointing_off(self, mock_cls):

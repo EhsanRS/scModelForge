@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 
 from scmodelforge.models._utils import count_parameters, init_weights
+from scmodelforge.models.components.attention import build_encoder, build_encoder_layer
 from scmodelforge.models.components.embeddings import GeneExpressionEmbedding
 from scmodelforge.models.components.heads import ExpressionPredictionHead
 from scmodelforge.models.components.pooling import cls_pool, mean_pool
@@ -57,6 +58,13 @@ class MaskedAutoencoder(nn.Module):
         Whether to use expression value projection in embeddings.
     layer_norm_eps
         Epsilon for LayerNorm layers.
+    attention_type
+        Attention mechanism: ``"standard"``, ``"flash"``, ``"gene_bias"``,
+        or ``"linear"``.
+    max_genes
+        Max gene vocab size for gene_bias attention.
+    gene_bias_init_std
+        Std for gene-gene bias initialisation.
     """
 
     def __init__(
@@ -76,11 +84,15 @@ class MaskedAutoencoder(nn.Module):
         *,
         use_expression_values: bool = True,
         layer_norm_eps: float = 1e-12,
+        attention_type: str = "standard",
+        max_genes: int = 30000,
+        gene_bias_init_std: float = 0.02,
     ) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.encoder_dim = encoder_dim
         self._pooling_strategy = pooling
+        self._attention_type = attention_type
 
         if decoder_dim is None:
             decoder_dim = encoder_dim // 2
@@ -102,17 +114,22 @@ class MaskedAutoencoder(nn.Module):
             layer_norm_eps=layer_norm_eps,
         )
 
-        enc_layer = nn.TransformerEncoderLayer(
+        enc_layer = build_encoder_layer(
+            attention_type=attention_type,
             d_model=encoder_dim,
             nhead=encoder_heads,
             dim_feedforward=ffn_dim,
             dropout=dropout,
             activation=activation,
-            batch_first=True,
-            norm_first=True,
             layer_norm_eps=layer_norm_eps,
+            max_genes=max_genes,
+            gene_bias_init_std=gene_bias_init_std,
         )
-        self.encoder = nn.TransformerEncoder(enc_layer, num_layers=encoder_layers)
+        self.encoder = build_encoder(
+            attention_type=attention_type,
+            encoder_layer=enc_layer,
+            num_layers=encoder_layers,
+        )
 
         # --- Decoder ---
         self.enc_to_dec = nn.Linear(encoder_dim, decoder_dim)
@@ -121,17 +138,22 @@ class MaskedAutoencoder(nn.Module):
         self.decoder_position_embedding = nn.Embedding(max_seq_len, decoder_dim)
 
         decoder_ffn_dim = 4 * decoder_dim
-        dec_layer = nn.TransformerEncoderLayer(
+        dec_layer = build_encoder_layer(
+            attention_type=attention_type,
             d_model=decoder_dim,
             nhead=decoder_heads,
             dim_feedforward=decoder_ffn_dim,
             dropout=dropout,
             activation=activation,
-            batch_first=True,
-            norm_first=True,
             layer_norm_eps=layer_norm_eps,
+            max_genes=max_genes,
+            gene_bias_init_std=gene_bias_init_std,
         )
-        self.decoder = nn.TransformerEncoder(dec_layer, num_layers=decoder_layers)
+        self.decoder = build_encoder(
+            attention_type=attention_type,
+            encoder_layer=dec_layer,
+            num_layers=decoder_layers,
+        )
 
         self.expression_head = ExpressionPredictionHead(hidden_dim=decoder_dim)
 
@@ -181,10 +203,15 @@ class MaskedAutoencoder(nn.Module):
         # Full embeddings
         emb = self.embedding(input_ids, values=values)
 
+        # Build encoder kwargs for gene_bias
+        encoder_kwargs = {}
+        if self._attention_type == "gene_bias":
+            encoder_kwargs["gene_indices"] = input_ids
+
         # If no masking, run full encoder and return embeddings only
         if masked_positions is None or not masked_positions.any():
             padding_mask = attention_mask == 0
-            hidden = self.encoder(emb, src_key_padding_mask=padding_mask)
+            hidden = self.encoder(emb, src_key_padding_mask=padding_mask, **encoder_kwargs)
             embeddings = self._pool(hidden, attention_mask)
             return ModelOutput(loss=None, logits=None, embeddings=embeddings)
 
@@ -200,15 +227,31 @@ class MaskedAutoencoder(nn.Module):
         # Only run encoder if there are unmasked tokens
         if max_unmasked > 0:
             # Gather unmasked embeddings into dense tensor
-            enc_input = torch.zeros(batch_size, max_unmasked, self.encoder_dim, device=emb.device, dtype=emb.dtype)
+            enc_input = torch.zeros(
+                batch_size, max_unmasked, self.encoder_dim, device=emb.device, dtype=emb.dtype,
+            )
             enc_padding_mask = torch.ones(batch_size, max_unmasked, dtype=torch.bool, device=emb.device)
+
+            # For gene_bias, we need to gather the corresponding gene indices
+            enc_gene_indices = None
+            if self._attention_type == "gene_bias":
+                enc_gene_indices = torch.zeros(
+                    batch_size, max_unmasked, dtype=input_ids.dtype, device=input_ids.device,
+                )
+
             for i in range(batch_size):
                 idx = unmasked[i].nonzero(as_tuple=True)[0]
                 n = idx.size(0)
                 enc_input[i, :n] = emb[i, idx]
                 enc_padding_mask[i, :n] = False  # False = attend
+                if enc_gene_indices is not None:
+                    enc_gene_indices[i, :n] = input_ids[i, idx]
 
-            enc_hidden = self.encoder(enc_input, src_key_padding_mask=enc_padding_mask)
+            enc_encoder_kwargs = {}
+            if enc_gene_indices is not None:
+                enc_encoder_kwargs["gene_indices"] = enc_gene_indices
+
+            enc_hidden = self.encoder(enc_input, src_key_padding_mask=enc_padding_mask, **enc_encoder_kwargs)
 
             # Project encoder outputs to decoder dim
             enc_projected = self.enc_to_dec(enc_hidden)  # (B, max_unmasked, decoder_dim)
@@ -225,7 +268,12 @@ class MaskedAutoencoder(nn.Module):
 
         # Decoder padding mask
         dec_padding_mask = attention_mask == 0
-        dec_hidden = self.decoder(dec_input, src_key_padding_mask=dec_padding_mask)
+
+        decoder_kwargs = {}
+        if self._attention_type == "gene_bias":
+            decoder_kwargs["gene_indices"] = input_ids
+
+        dec_hidden = self.decoder(dec_input, src_key_padding_mask=dec_padding_mask, **decoder_kwargs)
 
         # Prediction head
         pred_values = self.expression_head(dec_hidden)  # (B, S)
@@ -241,7 +289,7 @@ class MaskedAutoencoder(nn.Module):
 
         embeddings = self._pool(
             # For embeddings during training, use encoder on full sequence
-            self.encoder(emb, src_key_padding_mask=(attention_mask == 0)),
+            self.encoder(emb, src_key_padding_mask=(attention_mask == 0), **encoder_kwargs),
             attention_mask,
         )
 
@@ -275,7 +323,12 @@ class MaskedAutoencoder(nn.Module):
         """
         emb = self.embedding(input_ids, values=values)
         padding_mask = attention_mask == 0
-        hidden = self.encoder(emb, src_key_padding_mask=padding_mask)
+
+        encoder_kwargs = {}
+        if self._attention_type == "gene_bias":
+            encoder_kwargs["gene_indices"] = input_ids
+
+        hidden = self.encoder(emb, src_key_padding_mask=padding_mask, **encoder_kwargs)
         return self._pool(hidden, attention_mask)
 
     def _pool(self, hidden: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
@@ -317,6 +370,9 @@ class MaskedAutoencoder(nn.Module):
             pooling=config.pooling,
             activation=config.activation,
             use_expression_values=config.use_expression_values,
+            attention_type=config.attention.type,
+            max_genes=config.attention.max_genes,
+            gene_bias_init_std=config.attention.gene_bias_init_std,
         )
 
     def num_parameters(self, *, trainable_only: bool = True) -> int:

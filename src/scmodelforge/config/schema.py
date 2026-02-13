@@ -219,6 +219,30 @@ class TokenizerConfig:
 
 
 @dataclass
+class AttentionConfig:
+    """Attention mechanism configuration.
+
+    Attributes
+    ----------
+    type
+        Attention type: ``"standard"``, ``"flash"``, ``"gene_bias"``,
+        ``"linear"``.
+    max_genes
+        Maximum gene vocabulary size for gene_bias attention.  Determines
+        the size of the learnable bias matrix.
+    gene_bias_init_std
+        Standard deviation for gene-gene bias initialisation.
+    linear_feature_map
+        Feature map for linear attention: ``"elu"`` (default).
+    """
+
+    type: str = "standard"
+    max_genes: int = 30000
+    gene_bias_init_std: float = 0.02
+    linear_feature_map: str = "elu"
+
+
+@dataclass
 class ModelConfig:
     """Configuration for model architecture."""
 
@@ -243,6 +267,8 @@ class ModelConfig:
     decoder_dim: int | None = None  # Defaults to hidden_dim // 2
     decoder_layers: int = 4
     decoder_heads: int | None = None  # Defaults to num_heads
+    # Attention mechanism
+    attention: AttentionConfig = field(default_factory=AttentionConfig)
 
 
 @dataclass

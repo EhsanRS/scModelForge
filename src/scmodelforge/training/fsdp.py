@@ -56,7 +56,9 @@ def build_fsdp_strategy(fsdp_config: FSDPConfig):
 
     activation_checkpointing_policy = None
     if fsdp_config.activation_checkpointing:
-        activation_checkpointing_policy = {nn.TransformerEncoderLayer}
+        from scmodelforge.models.components.encoder_layer import ScModelForgeEncoderLayer
+
+        activation_checkpointing_policy = {nn.TransformerEncoderLayer, ScModelForgeEncoderLayer}
 
     logger.info(
         "Building FSDP strategy: sharding=%s, cpu_offload=%s, "

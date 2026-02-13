@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from scmodelforge import __version__
-from scmodelforge.config.schema import MaskingConfig, ModelConfig, TokenizerConfig
+from scmodelforge.config.schema import AttentionConfig, MaskingConfig, ModelConfig, TokenizerConfig
 from scmodelforge.models.registry import get_model
 
 if TYPE_CHECKING:
@@ -73,6 +73,11 @@ def _config_dict_to_model_config(config_dict: dict[str, Any]) -> ModelConfig:
     # Filter to only known fields
     known_fields = {f.name for f in ModelConfig.__dataclass_fields__.values()}
     filtered = {k: v for k, v in raw.items() if k in known_fields}
+    # Reconstruct nested AttentionConfig
+    if "attention" in filtered and isinstance(filtered["attention"], dict):
+        attn_fields = {f.name for f in AttentionConfig.__dataclass_fields__.values()}
+        attn_filtered = {k: v for k, v in filtered["attention"].items() if k in attn_fields}
+        filtered["attention"] = AttentionConfig(**attn_filtered)
     return ModelConfig(**filtered)
 
 
