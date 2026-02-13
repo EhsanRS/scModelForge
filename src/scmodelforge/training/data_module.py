@@ -227,19 +227,20 @@ class CellDataModule:
         from scmodelforge.data.dataset import CellDataset
         from scmodelforge.data.gene_vocab import GeneVocab
 
-        # 1. Load AnnData
-        adata = load_adata(self._data_config, adata=self._adata)
+        # Determine obs_keys before loading so Census fetches required columns
+        obs_keys = None
+        samp_cfg = self._sampling_config
+        if samp_cfg is not None and samp_cfg.strategy == "weighted":
+            obs_keys = [samp_cfg.label_key]
+
+        # 1. Load AnnData (obs_keys forwarded to Census loader)
+        adata = load_adata(self._data_config, adata=self._adata, obs_keys=obs_keys)
         self._loaded_adata = adata
 
         # 2. Build GeneVocab
         self._gene_vocab = GeneVocab.from_adata(adata)
 
         # 3. Build CellDataset
-        # Include obs_keys needed for weighted sampling label extraction
-        obs_keys = None
-        samp_cfg = self._sampling_config
-        if samp_cfg is not None and samp_cfg.strategy == "weighted":
-            obs_keys = [samp_cfg.label_key]
         full_dataset = CellDataset(adata, self._gene_vocab, preprocessing, obs_keys=obs_keys)
 
         # 4. Build tokenizer and masking

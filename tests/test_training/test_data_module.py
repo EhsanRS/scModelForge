@@ -270,6 +270,34 @@ class TestCellDataModule:
         # Sequence length should be limited
         assert batch["input_ids"].shape[1] <= 5 + 1  # n_genes + CLS
 
+    def test_weighted_sampling_passes_obs_keys_to_load_adata(
+        self, tiny_adata: AnnData, tiny_tokenizer_config: TokenizerConfig,
+    ) -> None:
+        """Weighted sampling label_key must be forwarded to load_adata as obs_keys."""
+        from unittest.mock import patch
+
+        from scmodelforge.config.schema import DataConfig as _DataConfig, PreprocessingConfig
+
+        census_data_config = _DataConfig(
+            source="cellxgene_census",
+            preprocessing=PreprocessingConfig(normalize="library_size", target_sum=1e4, log1p=True),
+        )
+        samp_cfg = SamplingConfig(strategy="weighted", label_key="cell_type")
+        dm = CellDataModule(
+            data_config=census_data_config,
+            tokenizer_config=tiny_tokenizer_config,
+            training_batch_size=4,
+            num_workers=0,
+            val_split=0.2,
+            sampling_config=samp_cfg,
+        )
+        # Mock load_adata at the source module (locally imported in setup())
+        with patch("scmodelforge.data._utils.load_adata", return_value=tiny_adata) as mock_load:
+            dm.setup()
+            mock_load.assert_called_once()
+            _, kwargs = mock_load.call_args
+            assert kwargs.get("obs_keys") == ["cell_type"]
+
     def test_defaults_unchanged_behaviour(
         self, tiny_adata: AnnData, tiny_data_config: DataConfig, tiny_tokenizer_config: TokenizerConfig,
     ) -> None:
