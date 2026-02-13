@@ -40,6 +40,7 @@ cz-benchmarks = ["cz-benchmarks>=0.9"]
 eval = ["scib>=1.1", "pertpy>=0.6"]
 cloud = ["fsspec>=2023.1", "s3fs>=2023.1", "gcsfs>=2023.1"]
 hub = ["huggingface-hub>=0.20", "safetensors>=0.4"]
+geneformer = ["geneformer>=0.1", "transformers>=4.30"]
 peft = ["peft>=0.6"]
 wandb = ["wandb>=0.15"]
 dev = [
@@ -62,7 +63,7 @@ docs = [
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
 ]
-all = ["scModelForge[census,perturbation,eval,cz-benchmarks,cloud,hub,peft,wandb,dev,docs]"]
+all = ["scModelForge[census,perturbation,eval,cz-benchmarks,cloud,hub,geneformer,peft,wandb,dev,docs]"]
 
 [project.scripts]
 scmodelforge = "scmodelforge.cli:main"
@@ -77,6 +78,9 @@ scmodelforge = "scmodelforge.cli:main"
 #
 #   [project.entry-points."scmodelforge.benchmarks"]
 #   my_benchmark = "my_package.module:MyBenchmarkClass"
+#
+#   [project.entry-points."scmodelforge.zoo"]
+#   my_adapter = "my_package.module:MyAdapterClass"
 
 [build-system]
 requires = ["hatchling"]

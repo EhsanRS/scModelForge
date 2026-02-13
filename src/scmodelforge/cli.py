@@ -29,21 +29,28 @@ def train(config: str, resume: str | None) -> None:
 
 @main.command()
 @click.option("--config", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
-@click.option("--model", required=True, type=click.Path(exists=True), help="Model checkpoint path.")
+@click.option("--model", default=None, type=click.Path(exists=True), help="Model checkpoint path.")
 @click.option("--data", required=True, type=str, help="Assessment .h5ad file (local path or cloud URL).")
 @click.option("--output", default=None, type=click.Path(), help="Save results as JSON.")
-def benchmark(config: str, model: str, data: str, output: str | None) -> None:
-    """Run evaluation benchmarks on a trained model."""
+@click.option("--external-model", default=None, type=str, help="External model name (e.g. 'geneformer').")
+@click.option("--external-source", default=None, type=str, help="Model path or HF repo (e.g. 'ctheodoris/Geneformer').")
+@click.option("--device", default="cpu", type=str, help="Device for inference (e.g. 'cpu', 'cuda').")
+def benchmark(
+    config: str,
+    model: str | None,
+    data: str,
+    output: str | None,
+    external_model: str | None,
+    external_source: str | None,
+    device: str,
+) -> None:
+    """Run benchmarks on a trained model (native or external)."""
     import json
 
     import anndata as ad
-    import torch
 
     from scmodelforge.config import load_config
-    from scmodelforge.data.gene_vocab import GeneVocab
     from scmodelforge.eval.harness import EvalHarness
-    from scmodelforge.models.registry import get_model
-    from scmodelforge.tokenizers.registry import get_tokenizer
 
     cfg = load_config(config)
 
@@ -62,36 +69,51 @@ def benchmark(config: str, model: str, data: str, output: str | None) -> None:
         adata = ad.read_h5ad(data)
     click.echo(f"Loaded {adata.n_obs} cells from {data}")
 
-    # Build vocab and tokenizer
-    vocab = GeneVocab.from_adata(adata)
-    tok_cfg = cfg.tokenizer
-    from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
-
-    tokenizer = get_tokenizer(tok_cfg.strategy, **build_tokenizer_kwargs(tok_cfg, vocab))
-
-    # Build model from config
-    cfg.model.vocab_size = len(vocab)
-    nn_model = get_model(cfg.model.architecture, cfg.model)
-
-    # Load weights from checkpoint
-    checkpoint = torch.load(model, map_location="cpu", weights_only=True)
-    state_dict = checkpoint.get("state_dict", checkpoint)
-    # Strip "model." prefix if saved from LightningModule
-    cleaned = {}
-    for k, v in state_dict.items():
-        key = k.removeprefix("model.")
-        cleaned[key] = v
-    nn_model.load_state_dict(cleaned)
-    click.echo("Model weights loaded.")
-
-    # Build harness and run
+    # Build harness
     harness = EvalHarness.from_config(cfg.eval)
-    results = harness.run(
-        nn_model,
-        {"data": adata},
-        tokenizer,
-        batch_size=cfg.eval.batch_size,
-    )
+
+    if external_model:
+        # External model path — use zoo adapter
+        from scmodelforge.zoo.registry import get_external_model
+
+        kwargs: dict[str, str] = {"device": device}
+        if external_source:
+            kwargs["model_name_or_path"] = external_source
+        adapter = get_external_model(external_model, **kwargs)
+        click.echo(f"Using external model: {adapter.info.full_name or adapter.info.name}")
+
+        results = harness.run_external(adapter, {"data": adata}, device=device)
+    else:
+        # Native model path (original behaviour)
+        if model is None:
+            raise click.ClickException("--model is required when not using --external-model")
+
+        import torch
+
+        from scmodelforge.data.gene_vocab import GeneVocab
+        from scmodelforge.models.registry import get_model
+        from scmodelforge.tokenizers._utils import build_tokenizer_kwargs
+        from scmodelforge.tokenizers.registry import get_tokenizer
+
+        vocab = GeneVocab.from_adata(adata)
+        tok_cfg = cfg.tokenizer
+        tokenizer = get_tokenizer(tok_cfg.strategy, **build_tokenizer_kwargs(tok_cfg, vocab))
+
+        cfg.model.vocab_size = len(vocab)
+        nn_model = get_model(cfg.model.architecture, cfg.model)
+
+        checkpoint = torch.load(model, map_location="cpu", weights_only=True)
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        cleaned = {k.removeprefix("model."): v for k, v in state_dict.items()}
+        nn_model.load_state_dict(cleaned)
+        click.echo("Model weights loaded.")
+
+        results = harness.run(
+            nn_model,
+            {"data": adata},
+            tokenizer,
+            batch_size=cfg.eval.batch_size,
+        )
 
     # Print results
     for r in results:

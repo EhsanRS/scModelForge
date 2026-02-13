@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from scmodelforge.config.schema import EvalConfig
     from scmodelforge.eval.base import BaseBenchmark, BenchmarkResult
     from scmodelforge.tokenizers.base import BaseTokenizer
+    from scmodelforge.zoo.base import BaseModelAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -135,4 +136,44 @@ class EvalHarness:
             result = bench.run(embeddings, adata, dataset_name)
             logger.info("  %s", result.summary())
             results.append(result)
+        return results
+
+    def run_external(
+        self,
+        adapter: BaseModelAdapter,
+        datasets: dict[str, AnnData],
+        batch_size: int = 64,
+        device: str = "cpu",
+    ) -> list[BenchmarkResult]:
+        """Run benchmarks using an external model adapter.
+
+        Extracts embeddings via the adapter's own pipeline, then runs all
+        configured benchmarks on the result.
+
+        Parameters
+        ----------
+        adapter
+            External model adapter instance.
+        datasets
+            Mapping of dataset name to AnnData.
+        batch_size
+            Batch size for embedding extraction.
+        device
+            Device for inference.
+
+        Returns
+        -------
+        list[BenchmarkResult]
+        """
+        results: list[BenchmarkResult] = []
+        for ds_name, adata in datasets.items():
+            logger.info(
+                "Extracting embeddings via '%s' for dataset '%s' (%d cells)",
+                adapter.info.name,
+                ds_name,
+                adata.n_obs,
+            )
+            embeddings = adapter.extract_embeddings(adata, batch_size=batch_size, device=device)
+            ds_results = self.run_on_embeddings(embeddings, adata, ds_name)
+            results.extend(ds_results)
         return results

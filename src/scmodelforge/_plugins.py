@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 TOKENIZER_GROUP = "scmodelforge.tokenizers"
 MODEL_GROUP = "scmodelforge.models"
 BENCHMARK_GROUP = "scmodelforge.benchmarks"
+ZOO_GROUP = "scmodelforge.zoo"
 
 
 def discover_plugins(group: str, registry: dict[str, type]) -> None:
