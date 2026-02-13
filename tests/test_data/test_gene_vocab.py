@@ -29,6 +29,32 @@ class TestConstruction:
         assert vocab["B"] == NUM_SPECIAL_TOKENS + 1
         assert vocab["C"] == NUM_SPECIAL_TOKENS + 2
 
+    def test_from_genes_deduplicates(self):
+        """Duplicate genes must be removed — indices stay contiguous."""
+        vocab = GeneVocab.from_genes(["A", "B", "A"])
+        # Only 2 unique genes
+        assert len(vocab) == 2 + NUM_SPECIAL_TOKENS
+        # First occurrence order preserved, contiguous indices
+        assert vocab["A"] == NUM_SPECIAL_TOKENS
+        assert vocab["B"] == NUM_SPECIAL_TOKENS + 1
+        # Max index must be < total vocab size (no out-of-range)
+        max_idx = max(vocab[g] for g in ["A", "B"])
+        assert max_idx < len(vocab)
+
+    def test_from_genes_all_duplicates(self):
+        """All-duplicate input collapses to a single gene."""
+        vocab = GeneVocab.from_genes(["X", "X", "X"])
+        assert len(vocab) == 1 + NUM_SPECIAL_TOKENS
+        assert vocab["X"] == NUM_SPECIAL_TOKENS
+
+    def test_from_genes_preserves_first_occurrence_order(self):
+        """With duplicates, first-occurrence order is preserved."""
+        vocab = GeneVocab.from_genes(["C", "A", "B", "A", "C"])
+        assert vocab.genes == ["C", "A", "B"]
+        assert vocab["C"] == NUM_SPECIAL_TOKENS
+        assert vocab["A"] == NUM_SPECIAL_TOKENS + 1
+        assert vocab["B"] == NUM_SPECIAL_TOKENS + 2
+
     def test_from_adata(self, mini_adata):
         vocab = GeneVocab.from_adata(mini_adata)
         assert len(vocab) == 200 + NUM_SPECIAL_TOKENS

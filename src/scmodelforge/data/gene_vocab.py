@@ -65,13 +65,28 @@ class GeneVocab:
         """Build a vocabulary from a list of gene names.
 
         Indices are assigned sequentially starting after special tokens.
+        Duplicate gene names are silently deduplicated, preserving the
+        order of the first occurrence.
 
         Parameters
         ----------
         genes
-            Ordered list of gene names.
+            Ordered list of gene names (duplicates are removed).
         """
-        gene_to_idx = {g: i + NUM_SPECIAL_TOKENS for i, g in enumerate(genes)}
+        seen: set[str] = set()
+        unique: list[str] = []
+        for g in genes:
+            if g not in seen:
+                seen.add(g)
+                unique.append(g)
+        if len(unique) < len(list(genes)):
+            n_dups = len(list(genes)) - len(unique)
+            logger.warning(
+                "from_genes() received %d duplicate gene name(s); "
+                "duplicates were removed (keeping first occurrence).",
+                n_dups,
+            )
+        gene_to_idx = {g: i + NUM_SPECIAL_TOKENS for i, g in enumerate(unique)}
         return cls(gene_to_idx)
 
     @classmethod

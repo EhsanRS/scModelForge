@@ -15,6 +15,7 @@ Initial release of scModelForge, a complete toolkit for pretraining and fine-tun
 - Fix weighted sampling curriculum: add `SamplerEpochCallback` that calls `sampler.set_epoch()` each epoch, so `curriculum_warmup_epochs` actually progresses instead of staying at epoch 0 behavior
 - Fix `DistributedShardSampler(drop_last=True)`: now computes a globally consistent minimum per-rank cell count across all ranks and truncates to that value, ensuring equal step counts for DDP/FSDP synchronization with imbalanced shard sizes
 - Fix streaming mode memory: `CellDataModule` with `streaming=True` no longer materializes the full AnnData during setup. Vocab is built by scanning `var_names` in backed mode (metadata only), and validation uses a bounded subset (capped at 10k cells) from the first file
+- Fix `GeneVocab.from_genes()` with duplicate gene names: duplicates now deduplicated (first-occurrence order preserved) before index assignment, preventing out-of-range token indices that would crash embedding lookups
 
 ### Stage 0: Scaffolding
 
