@@ -41,6 +41,11 @@ eval = ["scib>=1.1", "pertpy>=0.6"]
 cloud = ["fsspec>=2023.1", "s3fs>=2023.1", "gcsfs>=2023.1"]
 hub = ["huggingface-hub>=0.20", "safetensors>=0.4"]
 geneformer = ["geneformer>=0.1", "transformers>=4.30"]
+scgpt = ["scgpt>=0.2"]
+uce = ["uce-model>=0.2"]
+scprint = ["scprint>=0.2"]
+scfoundation = ["scfoundation>=0.1"]
+arc-stack = ["arc-stack>=0.1"]
 peft = ["peft>=0.6"]
 wandb = ["wandb>=0.15"]
 dev = [
@@ -63,7 +68,7 @@ docs = [
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
 ]
-all = ["scModelForge[census,perturbation,eval,cz-benchmarks,cloud,hub,geneformer,peft,wandb,dev,docs]"]
+all = ["scModelForge[census,perturbation,eval,cz-benchmarks,cloud,hub,geneformer,scgpt,uce,scprint,scfoundation,arc-stack,peft,wandb,dev,docs]"]
 
 [project.scripts]
 scmodelforge = "scmodelforge.cli:main"
