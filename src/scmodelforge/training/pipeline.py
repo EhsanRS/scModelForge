@@ -79,7 +79,7 @@ class TrainingPipeline:
         )
 
         # 7. Callbacks
-        callbacks = self._build_callbacks()
+        callbacks = self._build_callbacks(data_module)
 
         # 8. Logger
         training_logger = self._build_logger()
@@ -114,7 +114,7 @@ class TrainingPipeline:
         logger.info("Training complete.")
         return trainer
 
-    def _build_callbacks(self) -> list:
+    def _build_callbacks(self, data_module=None) -> list:
         """Build the list of Lightning callbacks."""
         import lightning.pytorch as pl
 
@@ -141,6 +141,25 @@ class TrainingPipeline:
         # Custom callbacks
         callbacks.append(TrainingMetricsLogger(log_every_n_steps=cfg.log_every_n_steps))
         callbacks.append(GradientNormLogger(log_every_n_steps=cfg.log_every_n_steps))
+
+        # Assessment callback for in-training evaluation
+        eval_cfg = self.config.eval
+        if eval_cfg.benchmarks and data_module is not None:
+            from scmodelforge.eval.callback import AssessmentCallback
+
+            callbacks.append(
+                AssessmentCallback(
+                    config=eval_cfg,
+                    datasets={"val": data_module.adata},
+                    tokenizer=data_module.tokenizer,
+                    batch_size=eval_cfg.batch_size,
+                )
+            )
+            logger.info(
+                "AssessmentCallback enabled: %d benchmark(s) every %d epoch(s)",
+                len(eval_cfg.benchmarks),
+                eval_cfg.every_n_epochs,
+            )
 
         return callbacks
 

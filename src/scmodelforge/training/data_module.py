@@ -148,6 +148,7 @@ class CellDataModule:
         self._gene_vocab: GeneVocab | None = None
         self._tokenizer: BaseTokenizer | None = None
         self._masking: MaskingStrategy | None = None
+        self._loaded_adata: Any | None = None
         self._train_dataset: Dataset | IterableDataset | None = None
         self._val_dataset: TokenizedCellDataset | None = None
         self._sampler: WeightedCellSampler | None = None
@@ -181,6 +182,14 @@ class CellDataModule:
         """Masking strategy (available after :meth:`setup`)."""
         return self._masking
 
+    @property
+    def adata(self):
+        """Loaded AnnData (available after :meth:`setup`)."""
+        if self._loaded_adata is None:
+            msg = "Call setup() before accessing adata."
+            raise RuntimeError(msg)
+        return self._loaded_adata
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
@@ -202,6 +211,7 @@ class CellDataModule:
 
         # 1. Load AnnData
         adata = load_adata(self._data_config, adata=self._adata)
+        self._loaded_adata = adata
 
         # 2. Build GeneVocab
         self._gene_vocab = GeneVocab.from_adata(adata)

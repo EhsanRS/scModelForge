@@ -65,7 +65,7 @@ Execute the full training pipeline from seed to checkpoint.
 4. Infer `vocab_size` from gene vocabulary
 5. Instantiate model from registry using `get_model`
 6. Wrap model in `ScModelForgeLightningModule`
-7. Build callbacks (checkpoint, LR monitor, custom metrics)
+7. Build callbacks (checkpoint, LR monitor, custom metrics, optional `AssessmentCallback` when `eval.benchmarks` is configured)
 8. Build logger (wandb/tensorboard/csv)
 9. Resolve devices and distributed strategy
 10. Create `pl.Trainer` with all config options
@@ -96,12 +96,15 @@ best_ckpt = trainer.checkpoint_callback.best_model_path
 print(f"Best checkpoint: {best_ckpt}")
 ```
 
-##### `_build_callbacks() -> list[pl.Callback]`
+##### `_build_callbacks(data_module=None) -> list[pl.Callback]`
 
 Build the list of Lightning callbacks (internal).
 
+**Parameters:**
+- `data_module` (`CellDataModule | None`) — If provided and `config.eval.benchmarks` is non-empty, an `AssessmentCallback` is appended for in-training evaluation using the data module's loaded AnnData and tokenizer.
+
 **Returns:**
-- `list[pl.Callback]` — ModelCheckpoint, LearningRateMonitor, TrainingMetricsLogger, GradientNormLogger
+- `list[pl.Callback]` — ModelCheckpoint, LearningRateMonitor, TrainingMetricsLogger, GradientNormLogger, and optionally `AssessmentCallback`
 
 ##### `_build_logger() -> Logger`
 
@@ -264,6 +267,8 @@ CellDataModule(
 | `val_split` | `float` | `0.05` | Fraction of data reserved for validation |
 | `seed` | `int` | `42` | Random seed for reproducible splits |
 | `adata` | `object \| None` | `None` | Optional pre-loaded AnnData for testing (skips file loading) |
+| `sampling_config` | `SamplingConfig \| None` | `None` | Weighted sampling configuration |
+| `gene_selection_config` | `GeneSelectionConfig \| None` | `None` | Batch-level gene selection configuration |
 
 #### Properties
 
@@ -274,6 +279,10 @@ Gene vocabulary (available after `setup()`).
 ##### `tokenizer: BaseTokenizer`
 
 Tokenizer instance (available after `setup()`).
+
+##### `adata: AnnData`
+
+Loaded AnnData (available after `setup()`). Used by `TrainingPipeline` to supply data for `AssessmentCallback`.
 
 ##### `masking: MaskingStrategy | None`
 

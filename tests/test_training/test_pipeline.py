@@ -141,6 +141,71 @@ class TestTrainingPipelineUtils:
             assert strategy == "auto"
 
 
+class TestAssessmentCallbackWiring:
+    """Tests for AssessmentCallback integration in _build_callbacks."""
+
+    def test_no_assessment_callback_when_no_benchmarks(self, tiny_full_config: ScModelForgeConfig) -> None:
+        """When eval.benchmarks is empty, no AssessmentCallback is added."""
+        from scmodelforge.eval.callback import AssessmentCallback
+
+        pipeline = TrainingPipeline(tiny_full_config)
+        callbacks = pipeline._build_callbacks()
+        assert not any(isinstance(c, AssessmentCallback) for c in callbacks)
+
+    def test_no_assessment_callback_when_no_data_module(self, tiny_full_config: ScModelForgeConfig) -> None:
+        """Even with benchmarks configured, no callback if data_module is None."""
+        from scmodelforge.eval.callback import AssessmentCallback
+
+        tiny_full_config.eval.benchmarks = ["linear_probe"]
+        pipeline = TrainingPipeline(tiny_full_config)
+        callbacks = pipeline._build_callbacks(data_module=None)
+        assert not any(isinstance(c, AssessmentCallback) for c in callbacks)
+
+    def test_assessment_callback_attached_when_configured(
+        self,
+        tiny_adata: AnnData,
+        tiny_full_config: ScModelForgeConfig,
+    ) -> None:
+        """AssessmentCallback is attached when benchmarks are configured and data_module is available."""
+        from scmodelforge.eval.callback import AssessmentCallback
+
+        tiny_full_config.eval.benchmarks = ["linear_probe"]
+        pipeline = TrainingPipeline(tiny_full_config)
+
+        # Build a real data module so we can pass it
+        dm = CellDataModule(
+            data_config=tiny_full_config.data,
+            tokenizer_config=tiny_full_config.tokenizer,
+            training_batch_size=4,
+            num_workers=0,
+            val_split=0.2,
+            adata=tiny_adata,
+        )
+        dm.setup()
+
+        callbacks = pipeline._build_callbacks(data_module=dm)
+        assessment_cbs = [c for c in callbacks if isinstance(c, AssessmentCallback)]
+        assert len(assessment_cbs) == 1
+
+    def test_data_module_exposes_adata(
+        self,
+        tiny_adata: AnnData,
+        tiny_full_config: ScModelForgeConfig,
+    ) -> None:
+        """CellDataModule.adata property returns loaded AnnData after setup."""
+        dm = CellDataModule(
+            data_config=tiny_full_config.data,
+            tokenizer_config=tiny_full_config.tokenizer,
+            training_batch_size=4,
+            num_workers=0,
+            val_split=0.2,
+            adata=tiny_adata,
+        )
+        dm.setup()
+        assert dm.adata is not None
+        assert dm.adata.shape[0] == tiny_adata.shape[0]
+
+
 class TestImportPipeline:
     """Verify that the public API import works."""
 
@@ -198,7 +263,7 @@ class _PipelineWithAdata(TrainingPipeline):
             scheduler_config=cfg.training.scheduler,
         )
 
-        callbacks = self._build_callbacks()
+        callbacks = self._build_callbacks(data_module)
         training_logger = self._build_logger()
         devices, strategy = self._resolve_devices_and_strategy()
 
